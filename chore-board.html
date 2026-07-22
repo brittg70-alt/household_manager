@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Household Chore Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDE6D6; --card: #FBF8F0; --ink: #2B2E26; --ink-soft: #5C6156;
+    --forest: #3F5A44; --forest-tint: #E3E9E1;
+    --brick: #A8452E; --brick-tint: #F3E1DA;
+    --gold: #C0902F; --gold-tint: #F4E9D3;
+    --line: #DCD3BE;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--paper); color: var(--ink);
+    font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh;
+    background-image: radial-gradient(circle at 1px 1px, rgba(43,46,38,0.05) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid var(--ink); padding-bottom: 14px; margin-bottom: 22px; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 40px; margin: 0; letter-spacing: -0.01em; }
+  .datebox { text-align: right; font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+  .summary { display: flex; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
+  .pill { font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--ink); display: flex; gap: 6px; align-items: center; }
+  .pill b { font-size: 14px; }
+  .pill.overdue { background: var(--brick-tint); border-color: var(--brick); color: var(--brick); }
+  .pill.soon { background: var(--gold-tint); border-color: var(--gold); color: #8a6a1f; }
+  .pill.ontrack { background: var(--forest-tint); border-color: var(--forest); color: var(--forest); }
+  .section-label { font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px; margin: 30px 0 12px; display: flex; align-items: center; gap: 10px; }
+  .section-label .dash { flex: 1; height: 1px; background: var(--line); }
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 16px; position: relative; box-shadow: 3px 3px 0 rgba(43,46,38,0.08); }
+  .card.overdue { border-left: 6px solid var(--brick); }
+  .card.soon { border-left: 6px solid var(--gold); }
+  .card.ontrack { border-left: 6px solid var(--forest); }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .chore-name { font-weight: 600; font-size: 16px; line-height: 1.25; }
+  .badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); background: var(--paper); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; white-space: nowrap; }
+  .meta { margin-top: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ink-soft); }
+  .status-text.overdue { color: var(--brick); font-weight: 600; }
+  .status-text.soon { color: #8a6a1f; font-weight: 600; }
+  .status-text.ontrack { color: var(--forest); }
+  .assignee { margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+  .done-btn { margin-top: 14px; width: 100%; padding: 9px 0; border-radius: 7px; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .done-btn:active { transform: scale(0.97); }
+  .empty { font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); font-size: 13px; }
+  footer { margin-top: 40px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); text-align: center; }
+  #connStatus { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Household Chores</h1>
+    <div class="datebox"><div id="dateBox"></div><div id="connStatus">connecting…</div></div>
+  </header>
+  <div class="summary" id="summary"></div>
+  <div id="sections"><div class="empty">Loading chores…</div></div>
+  <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
+</div>
+
+<script src="recurrence.js"></script>
+
+<!-- Firebase (modular SDK via CDN) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, onSnapshot, doc, updateDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ---- Fill these in from Firebase Console > Project Settings > General ----
+  const firebaseConfig = {
+  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
+  authDomain: "household-manager-4de34.firebaseapp.com",
+  projectId: "household-manager-4de34",
+  storageBucket: "household-manager-4de34.firebasestorage.app",
+  messagingSenderId: "1054925325088",
+  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const choresCol = collection(db, "chores");
+
+  let currentChores = [];
+
+  onSnapshot(choresCol, (snapshot) => {
+    currentChores = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById("connStatus").textContent = "live";
+    render();
+  }, (err) => {
+    document.getElementById("connStatus").textContent = "offline / error";
+    console.error(err);
+  });
+
+  window.markDone = async function (id) {
+    const today = new Date().toISOString().slice(0, 10);
+    await updateDoc(doc(db, "chores", id), { lastCompleted: today });
+    // onSnapshot will re-render automatically once the write lands
+  };
+
+  function render() {
+    const today = new Date();
+    document.getElementById("dateBox").textContent =
+      today.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+    if (currentChores.length === 0) {
+      document.getElementById("sections").innerHTML = '<div class="empty">No chores yet — add some from the admin page.</div>';
+      document.getElementById("summary").innerHTML = "";
+      return;
+    }
+
+    const scored = currentChores.map(c => ({ chore: c, status: getStatus(c, today) }));
+    scored.sort((a, b) => a.status.diffDays - b.status.diffDays);
+
+    const counts = { overdue: 0, soon: 0, ontrack: 0 };
+    scored.forEach(s => counts[s.status.tier]++);
+
+    document.getElementById("summary").innerHTML = `
+      <div class="pill overdue"><b>${counts.overdue}</b> overdue</div>
+      <div class="pill soon"><b>${counts.soon}</b> due today/tomorrow</div>
+      <div class="pill ontrack"><b>${counts.ontrack}</b> on track</div>
+    `;
+
+    const groups = [
+      { key: "overdue", label: "Overdue" },
+      { key: "soon", label: "Due Today / Tomorrow" },
+      { key: "ontrack", label: "On Track" },
+    ];
+
+    document.getElementById("sections").innerHTML = groups.map(g => {
+      const items = scored.filter(s => s.status.tier === g.key);
+      if (items.length === 0) return "";
+      return `
+        <div class="section-label">${g.label}<div class="dash"></div></div>
+        <div class="board">
+          ${items.map(({ chore, status }) => `
+            <div class="card ${status.tier}">
+              <div class="card-top">
+                <div class="chore-name">${chore.name}</div>
+                <div class="badge">${frequencyLabel(chore.repeat)}</div>
+              </div>
+              <div class="meta status-text ${status.tier}">${statusText(status)}</div>
+              <div class="assignee">${chore.assignee || ""}</div>
+              <button class="done-btn" onclick="markDone('${chore.id}')">Mark done</button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }).join("");
+  }
+
+  setInterval(render, 60 * 1000); // recompute status even if no new writes come in
+</script>
+</body>
+</html>

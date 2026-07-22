@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chore Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --paper:#EDE6D6; --card:#FBF8F0; --ink:#2B2E26; --ink-soft:#5C6156; --line:#DCD3BE; --forest:#3F5A44; --brick:#A8452E; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:'Inter',sans-serif; padding: 20px 16px 60px; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-family:'Fraunces',serif; font-size: 28px; margin: 0 0 4px; }
+  p.sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 20px; }
+  .gate { background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 20px; }
+  .gate input { width: 100%; padding: 10px; font-size: 15px; border-radius: 6px; border: 1px solid var(--line); margin-bottom: 10px; box-sizing: border-box; }
+  .gate button, .save-btn, .add-btn { background: var(--ink); color: var(--paper); border: none; border-radius: 7px; padding: 10px 16px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .card { background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .row label { display: flex; flex-direction: column; font-size: 11px; color: var(--ink-soft); font-family:'IBM Plex Mono',monospace; flex: 1; min-width: 110px; }
+  input, select { padding: 8px; border-radius: 6px; border: 1px solid var(--line); font-size: 14px; font-family: 'Inter', sans-serif; }
+  .del-btn { background: transparent; color: var(--brick); border: 1px solid var(--brick); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 24px 0 12px; }
+  #status { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Chore Admin</h1>
+  <p class="sub">Add, edit, or remove chores. Changes appear on the wall board within a minute.</p>
+
+  <div class="gate" id="gate">
+    <div style="margin-bottom:10px; font-size:14px;">Sign in to edit chores</div>
+    <input type="email" id="emailInput" placeholder="email" autocomplete="username">
+    <input type="password" id="passwordInput" placeholder="password" autocomplete="current-password">
+    <button onclick="doLogin()">Sign in</button>
+    <div id="gateError" style="color:var(--brick); font-size:12px; margin-top:6px;"></div>
+  </div>
+
+  <div id="app" style="display:none;">
+    <div class="toolbar">
+      <span id="status"></span>
+      <div>
+        <button class="add-btn" onclick="addBlankChore()">+ Add chore</button>
+        <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import {
+    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  // ---- Same config as chore-board.html ----
+  const firebaseConfig = {
+  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
+  authDomain: "household-manager-4de34.firebaseapp.com",
+  projectId: "household-manager-4de34",
+  storageBucket: "household-manager-4de34.firebasestorage.app",
+  messagingSenderId: "1054925325088",
+  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+  const choresCol = collection(db, "chores");
+
+  window.doLogin = async function () {
+    const email = document.getElementById("emailInput").value;
+    const password = document.getElementById("passwordInput").value;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      document.getElementById("gateError").textContent = "Sign-in failed — check email/password.";
+    }
+  };
+
+  window.doLogout = function () {
+    signOut(auth);
+  };
+
+  onAuthStateChanged(auth, (user) => {
+    document.getElementById("gate").style.display = user ? "none" : "block";
+    document.getElementById("app").style.display = user ? "block" : "none";
+  });
+
+  let chores = [];
+
+  onSnapshot(choresCol, (snap) => {
+    chores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById("status").textContent = `${chores.length} chores`;
+    renderList();
+  });
+
+  window.addBlankChore = async function () {
+    await addDoc(choresCol, {
+      name: "New chore",
+      assignee: "Anyone",
+      repeat: { type: "days", value: 7 },
+      lastCompleted: new Date().toISOString().slice(0, 10),
+    });
+  };
+
+  window.saveChore = async function (id) {
+    const name = document.getElementById(`name-${id}`).value;
+    const assignee = document.getElementById(`assignee-${id}`).value;
+    const type = document.getElementById(`type-${id}`).value;
+    const lastCompleted = document.getElementById(`last-${id}`).value;
+
+    let repeat;
+    if (type === "days") {
+      repeat = { type: "days", value: Number(document.getElementById(`val1-${id}`).value) };
+    } else if (type === "rate") {
+      repeat = { type: "rate", times: Number(document.getElementById(`val1-${id}`).value), perDays: Number(document.getElementById(`val2-${id}`).value) };
+    } else if (type === "months") {
+      repeat = { type: "months", value: Number(document.getElementById(`val1-${id}`).value) };
+    } else if (type === "years") {
+      repeat = { type: "years", value: Number(document.getElementById(`val1-${id}`).value) };
+    }
+
+    await updateDoc(doc(db, "chores", id), { name, assignee, repeat, lastCompleted });
+  };
+
+  window.deleteChore = async function (id) {
+    if (confirm("Delete this chore?")) await deleteDoc(doc(db, "chores", id));
+  };
+
+  function repeatFields(chore) {
+    const r = chore.repeat || { type: "days", value: 1 };
+    const id = chore.id;
+    if (r.type === "rate") {
+      return `
+        <label>Times<input type="number" id="val1-${id}" value="${r.times}"></label>
+        <label>Per days<input type="number" id="val2-${id}" value="${r.perDays}"></label>
+      `;
+    }
+    return `<label>Every<input type="number" id="val1-${id}" value="${r.value}"></label><div id="val2-${id}" style="display:none;"></div>`;
+  }
+
+  function renderList() {
+    document.getElementById("list").innerHTML = chores.map(c => `
+      <div class="card">
+        <div class="row">
+          <label>Name<input id="name-${c.id}" value="${c.name}"></label>
+          <label>Assignee<input id="assignee-${c.id}" value="${c.assignee || ""}"></label>
+        </div>
+        <div class="row">
+          <label>Repeat type
+            <select id="type-${c.id}" onchange="window.__rerenderRow('${c.id}', this.value)">
+              <option value="days" ${c.repeat.type === "days" ? "selected" : ""}>Fixed days</option>
+              <option value="rate" ${c.repeat.type === "rate" ? "selected" : ""}>X times per Y days</option>
+              <option value="months" ${c.repeat.type === "months" ? "selected" : ""}>Months</option>
+              <option value="years" ${c.repeat.type === "years" ? "selected" : ""}>Years</option>
+            </select>
+          </label>
+          ${repeatFields(c)}
+          <label>Last completed<input type="date" id="last-${c.id}" value="${c.lastCompleted}"></label>
+        </div>
+        <div class="row" style="justify-content:flex-end;">
+          <button class="del-btn" onclick="deleteChore('${c.id}')">Delete</button>
+          <button class="save-btn" onclick="saveChore('${c.id}')">Save</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  // when repeat type dropdown changes, swap the value fields before saving
+  window.__rerenderRow = function (id, newType) {
+    const chore = chores.find(c => c.id === id);
+    chore.repeat = newType === "rate"
+      ? { type: "rate", times: 6, perDays: 10 }
+      : { type: newType, value: 1 };
+    renderList();
+  };
+</script>
+</body>
+</html>
