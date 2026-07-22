@@ -22,6 +22,8 @@
   .del-btn { background: transparent; color: var(--brick); border: 1px solid var(--brick); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 24px 0 12px; }
   #status { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .tab-btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+  .tab-btn.active { background: var(--ink); color: var(--paper); }
 </style>
 </head>
 <body>
@@ -38,14 +40,32 @@
   </div>
 
   <div id="app" style="display:none;">
-    <div class="toolbar">
-      <span id="status"></span>
-      <div>
-        <button class="add-btn" onclick="addBlankChore()">+ Add chore</button>
-        <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
-      </div>
+    <div class="tabs" style="display:flex; gap:8px; margin-bottom:16px;">
+      <button class="tab-btn active" id="tabChoresAdmin" onclick="switchAdminTab('chores')">Chores</button>
+      <button class="tab-btn" id="tabEventsAdmin" onclick="switchAdminTab('events')">Events</button>
     </div>
-    <div id="list"></div>
+
+    <div id="choresAdmin">
+      <div class="toolbar">
+        <span id="status"></span>
+        <div>
+          <button class="add-btn" onclick="addBlankChore()">+ Add chore</button>
+          <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
+        </div>
+      </div>
+      <div id="list"></div>
+    </div>
+
+    <div id="eventsAdmin" style="display:none;">
+      <div class="toolbar">
+        <span id="eventStatus"></span>
+        <div>
+          <button class="add-btn" onclick="addBlankEvent()">+ Add event</button>
+          <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
+        </div>
+      </div>
+      <div id="eventList"></div>
+    </div>
   </div>
 </div>
 
@@ -60,18 +80,26 @@
 
   // ---- Same config as chore-board.html ----
   const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
   const choresCol = collection(db, "chores");
+  const eventsCol = collection(db, "events");
+
+  window.switchAdminTab = function (tab) {
+    document.getElementById("tabChoresAdmin").classList.toggle("active", tab === "chores");
+    document.getElementById("tabEventsAdmin").classList.toggle("active", tab === "events");
+    document.getElementById("choresAdmin").style.display = tab === "chores" ? "block" : "none";
+    document.getElementById("eventsAdmin").style.display = tab === "events" ? "block" : "none";
+  };
 
   window.doLogin = async function () {
     const email = document.getElementById("emailInput").value;
@@ -131,6 +159,102 @@
 
   window.deleteChore = async function (id) {
     if (confirm("Delete this chore?")) await deleteDoc(doc(db, "chores", id));
+  };
+
+  // ---------- Events ----------
+  let events = [];
+
+  onSnapshot(eventsCol, (snap) => {
+    events = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
+    document.getElementById("eventStatus").textContent = `${events.length} events`;
+    renderEventList();
+  });
+
+  window.addBlankEvent = async function () {
+    await addDoc(eventsCol, {
+      title: "New event",
+      date: new Date().toISOString().slice(0, 10),
+      time: "",
+      notes: "",
+    });
+  };
+
+  window.saveEvent = async function (id) {
+    const title = document.getElementById(`etitle-${id}`).value;
+    const date = document.getElementById(`edate-${id}`).value;
+    const time = document.getElementById(`etime-${id}`).value;
+    const notes = document.getElementById(`enotes-${id}`).value;
+    const repeatType = document.getElementById(`erepeat-${id}`).value;
+
+    let repeat = null;
+    if (repeatType === "days") {
+      repeat = { type: "days", value: Number(document.getElementById(`erval1-${id}`).value) };
+    } else if (repeatType === "rate") {
+      repeat = { type: "rate", times: Number(document.getElementById(`erval1-${id}`).value), perDays: Number(document.getElementById(`erval2-${id}`).value) };
+    } else if (repeatType === "months") {
+      repeat = { type: "months", value: Number(document.getElementById(`erval1-${id}`).value) };
+    } else if (repeatType === "years") {
+      repeat = { type: "years", value: Number(document.getElementById(`erval1-${id}`).value) };
+    }
+
+    await updateDoc(doc(db, "events", id), { title, date, time, notes, repeat });
+  };
+
+  window.deleteEvent = async function (id) {
+    if (confirm("Delete this event?")) await deleteDoc(doc(db, "events", id));
+  };
+
+  function eventRepeatFields(e) {
+    const r = e.repeat;
+    const id = e.id;
+    const type = r ? r.type : "none";
+    if (type === "rate") {
+      return `
+        <label>Times<input type="number" id="erval1-${id}" value="${r.times}"></label>
+        <label>Per days<input type="number" id="erval2-${id}" value="${r.perDays}"></label>
+      `;
+    }
+    return `<label>Every<input type="number" id="erval1-${id}" value="${r ? r.value : 1}" ${type === "none" ? "disabled" : ""}></label><div id="erval2-${id}" style="display:none;"></div>`;
+  }
+
+  function renderEventList() {
+    document.getElementById("eventList").innerHTML = events.map(e => `
+      <div class="card">
+        <div class="row">
+          <label>Title<input id="etitle-${e.id}" value="${e.title}"></label>
+          <label>Date<input type="date" id="edate-${e.id}" value="${e.date}"></label>
+          <label>Time (optional)<input type="time" id="etime-${e.id}" value="${e.time || ""}"></label>
+        </div>
+        <div class="row">
+          <label style="flex:1;">Notes<input id="enotes-${e.id}" value="${e.notes || ""}"></label>
+        </div>
+        <div class="row">
+          <label>Repeats
+            <select id="erepeat-${e.id}" onchange="window.__rerenderEventRow('${e.id}', this.value)">
+              <option value="none" ${!e.repeat ? "selected" : ""}>Doesn't repeat</option>
+              <option value="days" ${e.repeat && e.repeat.type === "days" ? "selected" : ""}>Fixed days</option>
+              <option value="rate" ${e.repeat && e.repeat.type === "rate" ? "selected" : ""}>X times per Y days</option>
+              <option value="months" ${e.repeat && e.repeat.type === "months" ? "selected" : ""}>Months</option>
+              <option value="years" ${e.repeat && e.repeat.type === "years" ? "selected" : ""}>Years</option>
+            </select>
+          </label>
+          ${eventRepeatFields(e)}
+        </div>
+        <div class="row" style="justify-content:flex-end;">
+          <button class="del-btn" onclick="deleteEvent('${e.id}')">Delete</button>
+          <button class="save-btn" onclick="saveEvent('${e.id}')">Save</button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  window.__rerenderEventRow = function (id, newType) {
+    const ev = events.find(e => e.id === id);
+    if (newType === "none") ev.repeat = null;
+    else if (newType === "rate") ev.repeat = { type: "rate", times: 1, perDays: 7 };
+    else ev.repeat = { type: newType, value: 1 };
+    renderEventList();
   };
 
   function repeatFields(chore) {

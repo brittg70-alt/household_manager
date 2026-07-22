@@ -51,6 +51,31 @@
   .empty { font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); font-size: 13px; }
   footer { margin-top: 40px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); text-align: center; }
   #connStatus { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab-btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+  .tab-btn.active { background: var(--ink); color: var(--paper); }
+
+  .cal-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .cal-toolbar button { border: 1.5px solid var(--ink); background: var(--card); border-radius: 6px; padding: 5px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer; }
+  .cal-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 20px; flex: 1; }
+
+  .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+  .day-col { background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 10px; min-height: 160px; }
+  .day-col.today { border-color: var(--forest); box-shadow: 0 0 0 2px var(--forest-tint); }
+  .day-head { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; margin-bottom: 6px; }
+  .day-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 20px; margin-bottom: 8px; }
+  .evt { background: var(--forest-tint); border-left: 3px solid var(--forest); border-radius: 5px; padding: 4px 6px; font-size: 12px; margin-bottom: 5px; }
+  .evt .t { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); display: block; }
+
+  .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .month-headrow { display: contents; }
+  .month-headcell { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; text-align: center; padding-bottom: 4px; }
+  .month-cell { background: var(--card); border: 1.5px solid var(--line); border-radius: 8px; padding: 6px; min-height: 90px; }
+  .month-cell.out { opacity: 0.4; }
+  .month-cell.today { border-color: var(--forest); }
+  .month-daynum { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); margin-bottom: 4px; }
+  .month-evt { font-size: 11px; background: var(--forest-tint); border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -59,12 +84,39 @@
     <h1>Household Chores</h1>
     <div class="datebox"><div id="dateBox"></div><div id="connStatus">connecting…</div></div>
   </header>
-  <div class="summary" id="summary"></div>
-  <div id="sections"><div class="empty">Loading chores…</div></div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tabChores" onclick="switchTab('chores')">Chores</button>
+    <button class="tab-btn" id="tabCalendar" onclick="switchTab('calendar')">Calendar</button>
+  </div>
+
+  <div id="choresView">
+    <div class="cal-toolbar" style="margin-bottom:10px;">
+      <div class="cal-title" style="font-size:16px;" id="choresViewTitle">Upcoming chores</div>
+      <button onclick="toggleShowAllChores()" id="showAllBtn">See all chores</button>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div id="sections"><div class="empty">Loading chores…</div></div>
+  </div>
+
+  <div id="calendarView" style="display:none;">
+    <div class="tabs">
+      <button class="tab-btn active" id="tabWeek" onclick="switchCalMode('week')">Week</button>
+      <button class="tab-btn" id="tabMonth" onclick="switchCalMode('month')">Month</button>
+    </div>
+    <div class="cal-toolbar">
+      <button onclick="calNav(-1)">&larr; Prev</button>
+      <div class="cal-title" id="calTitle"></div>
+      <button onclick="calNav(1)">Next &rarr;</button>
+      <button onclick="calToday()">Today</button>
+    </div>
+    <div id="calGrid"></div>
+  </div>
+
   <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
 </div>
 
 <script src="recurrence.js"></script>
+<script src="calendar.js"></script>
 
 <!-- Firebase (modular SDK via CDN) -->
 <script type="module">
@@ -75,19 +127,96 @@
 
   // ---- Fill these in from Firebase Console > Project Settings > General ----
   const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const choresCol = collection(db, "chores");
+  const eventsCol = collection(db, "events");
 
   let currentChores = [];
+  let currentEvents = [];
+  let calMode = "week";     // "week" | "month"
+  let calOffset = 0;        // weeks or months from current, depending on calMode
+
+  onSnapshot(eventsCol, (snapshot) => {
+    currentEvents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (document.getElementById("calendarView").style.display !== "none") renderCalendar();
+  });
+
+  window.switchTab = function (tab) {
+    document.getElementById("tabChores").classList.toggle("active", tab === "chores");
+    document.getElementById("tabCalendar").classList.toggle("active", tab === "calendar");
+    document.getElementById("choresView").style.display = tab === "chores" ? "block" : "none";
+    document.getElementById("calendarView").style.display = tab === "calendar" ? "block" : "none";
+    if (tab === "calendar") renderCalendar();
+  };
+
+  window.switchCalMode = function (mode) {
+    calMode = mode;
+    calOffset = 0;
+    document.getElementById("tabWeek").classList.toggle("active", mode === "week");
+    document.getElementById("tabMonth").classList.toggle("active", mode === "month");
+    renderCalendar();
+  };
+
+  window.calNav = function (dir) {
+    calOffset += dir;
+    renderCalendar();
+  };
+
+  window.calToday = function () {
+    calOffset = 0;
+    renderCalendar();
+  };
+
+  function renderCalendar() {
+    const today = new Date();
+    if (calMode === "week") {
+      const days = buildWeekDays(calOffset);
+      const rangeStart = days[0], rangeEnd = new Date(days[6]); rangeEnd.setHours(23, 59, 59, 999);
+      const occurrences = expandOccurrences(currentEvents, rangeStart, rangeEnd);
+      document.getElementById("calTitle").textContent =
+        `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+      document.getElementById("calGrid").innerHTML = `
+        <div class="week-grid">
+          ${days.map(d => `
+            <div class="day-col ${isSameDay(d, today) ? "today" : ""}">
+              <div class="day-head">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>
+              <div class="day-num">${d.getDate()}</div>
+              ${occurrencesOnDate(occurrences, d).map(o => `
+                <div class="evt">${o.event.time ? `<span class="t">${formatTime(o.event.time)}</span>` : ""}${o.event.title}${o.event.repeat ? " ↻" : ""}</div>
+              `).join("") || ""}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    } else {
+      const cells = buildMonthDays(calOffset);
+      const rangeStart = cells[0].date, rangeEnd = new Date(cells[41].date); rangeEnd.setHours(23, 59, 59, 999);
+      const occurrences = expandOccurrences(currentEvents, rangeStart, rangeEnd);
+      const monthLabel = new Date(cells[14].date).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      document.getElementById("calTitle").textContent = monthLabel;
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      document.getElementById("calGrid").innerHTML = `
+        <div class="month-grid">
+          ${dayNames.map(n => `<div class="month-headcell">${n}</div>`).join("")}
+          ${cells.map(({ date, inMonth }) => `
+            <div class="month-cell ${inMonth ? "" : "out"} ${isSameDay(date, today) ? "today" : ""}">
+              <div class="month-daynum">${date.getDate()}</div>
+              ${occurrencesOnDate(occurrences, date).map(o => `<div class="month-evt">${o.event.title}${o.event.repeat ? " ↻" : ""}</div>`).join("")}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+  }
 
   onSnapshot(choresCol, (snapshot) => {
     currentChores = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -104,10 +233,20 @@
     // onSnapshot will re-render automatically once the write lands
   };
 
+  let showAllChores = false;
+
+  window.toggleShowAllChores = function () {
+    showAllChores = !showAllChores;
+    render();
+  };
+
   function render() {
     const today = new Date();
     document.getElementById("dateBox").textContent =
       today.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+    document.getElementById("showAllBtn").textContent = showAllChores ? "Show upcoming only" : "See all chores";
+    document.getElementById("choresViewTitle").textContent = showAllChores ? "All chores" : "Upcoming chores";
 
     if (currentChores.length === 0) {
       document.getElementById("sections").innerHTML = '<div class="empty">No chores yet — add some from the admin page.</div>';
@@ -131,9 +270,9 @@
       { key: "overdue", label: "Overdue" },
       { key: "soon", label: "Due Today / Tomorrow" },
       { key: "ontrack", label: "On Track" },
-    ];
+    ].filter(g => showAllChores || g.key !== "ontrack");
 
-    document.getElementById("sections").innerHTML = groups.map(g => {
+    const sectionsHtml = groups.map(g => {
       const items = scored.filter(s => s.status.tier === g.key);
       if (items.length === 0) return "";
       return `
@@ -153,6 +292,9 @@
         </div>
       `;
     }).join("");
+
+    document.getElementById("sections").innerHTML = sectionsHtml ||
+      `<div class="empty">Nothing overdue or due soon — everything's on track. ${!showAllChores ? '"See all chores" shows the rest.' : ""}</div>`;
   }
 
   setInterval(render, 60 * 1000); // recompute status even if no new writes come in

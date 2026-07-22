@@ -14,10 +14,14 @@
            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastCompleted']);
          allow create, delete: if request.auth != null;
        }
+       match /events/{eventId} {
+         allow read: if true;
+         allow write: if request.auth != null;
+       }
      }
    }
    ```
-   Anyone can view the board and mark a chore done (that only ever changes the `lastCompleted` field). Adding, deleting, or otherwise editing a chore requires a signed-in account — that's real enforcement at the database level, not just a UI gate.
+   Anyone can view the board and mark a chore done (that only ever changes the `lastCompleted` field). Adding, deleting, or otherwise editing a chore — and any change to events at all — requires a signed-in account.
 
 ## 1b. Turn on login for the admin page
 1. Left sidebar: **Build → Authentication → Get started**.
@@ -37,8 +41,12 @@ Easiest path — Firebase Hosting, since you already have the project open:
 
 (GitHub Pages or Cloudflare Pages work exactly as well if you'd rather not touch the CLI — just push/drag the same three files.)
 
-## 4. Add your chores
-Open `chore-admin.html` at your new URL, sign in with the email/password you created in step 1b, and click **+ Add chore** for each one — no need to touch Firestore's console directly, though you can if you prefer.
+## 4. Add your chores and events
+Open `chore-admin.html` at your new URL, sign in with the email/password you created in step 1b, and use the **Chores** and **Events** tabs to add each one — no need to touch Firestore's console directly, though you can if you prefer.
+
+Note: you now have five files to upload/deploy together — `chore-board.html`, `chore-admin.html`, `recurrence.js`, `calendar.js`, and this `SETUP.md`. `chore-board.html` loads both `recurrence.js` and `calendar.js`, so all four files need to sit in the same folder.
+
+Events can optionally repeat, using the same recurrence engine as chores — set "Repeats" on any event in the admin page (fixed days, X-times-per-Y-days, months, or years). A repeating event shows a ↻ next to its title on the board.
 
 ## 5. Put it on the iPad
 1. Open `chore-board.html`'s URL in Safari on the iPad.
