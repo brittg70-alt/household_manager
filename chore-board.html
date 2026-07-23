@@ -13,6 +13,8 @@
     --brick: #A8452E; --brick-tint: #F3E1DA;
     --gold: #C0902F; --gold-tint: #F4E9D3;
     --line: #DCD3BE;
+    --sarah: #3B6EA5; --sarah-tint: #DDE6EF;
+    --britt: #4B7A4F; --britt-tint: #E1E9DE;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -67,6 +69,8 @@
   .day-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 20px; margin-bottom: 8px; }
   .evt { background: var(--forest-tint); border-left: 3px solid var(--forest); border-radius: 5px; padding: 4px 6px; font-size: 12px; margin-bottom: 5px; }
   .evt .t { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); display: block; }
+  .evt.sarah { background: var(--sarah-tint); border-left-color: var(--sarah); }
+  .evt.britt { background: var(--britt-tint); border-left-color: var(--britt); }
 
   .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
   .month-headrow { display: contents; }
@@ -76,6 +80,8 @@
   .month-cell.today { border-color: var(--forest); }
   .month-daynum { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); margin-bottom: 4px; }
   .month-evt { font-size: 11px; background: var(--forest-tint); border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .month-evt.sarah { background: var(--sarah-tint); }
+  .month-evt.britt { background: var(--britt-tint); }
 </style>
 </head>
 <body>
@@ -109,6 +115,10 @@
       <button onclick="calNav(1)">Next &rarr;</button>
       <button onclick="calToday()">Today</button>
     </div>
+    <div style="display:flex; gap:14px; margin-bottom:12px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft);">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--sarah);margin-right:4px;"></span>Sarah</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--britt);margin-right:4px;"></span>Britt</span>
+    </div>
     <div id="calGrid"></div>
   </div>
 
@@ -127,13 +137,13 @@
 
   // ---- Fill these in from Firebase Console > Project Settings > General ----
   const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -176,6 +186,12 @@
     renderCalendar();
   };
 
+  function assigneeClass(assignee) {
+    if (assignee === "Sarah") return "sarah";
+    if (assignee === "Britt") return "britt";
+    return "";
+  }
+
   function renderCalendar() {
     const today = new Date();
     if (calMode === "week") {
@@ -191,7 +207,7 @@
               <div class="day-head">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>
               <div class="day-num">${d.getDate()}</div>
               ${occurrencesOnDate(occurrences, d).map(o => `
-                <div class="evt">${o.event.time ? `<span class="t">${formatTime(o.event.time)}</span>` : ""}${o.event.title}${o.event.repeat ? " ↻" : ""}</div>
+                <div class="evt ${assigneeClass(o.event.assignee)}">${o.event.time ? `<span class="t">${formatEventTime(o.event)}</span>` : ""}${o.event.title}${o.event.repeat ? " ↻" : ""}</div>
               `).join("") || ""}
             </div>
           `).join("")}
@@ -210,7 +226,7 @@
           ${cells.map(({ date, inMonth }) => `
             <div class="month-cell ${inMonth ? "" : "out"} ${isSameDay(date, today) ? "today" : ""}">
               <div class="month-daynum">${date.getDate()}</div>
-              ${occurrencesOnDate(occurrences, date).map(o => `<div class="month-evt">${o.event.title}${o.event.repeat ? " ↻" : ""}</div>`).join("")}
+              ${occurrencesOnDate(occurrences, date).map(o => `<div class="month-evt ${assigneeClass(o.event.assignee)}">${o.event.title}${o.event.repeat ? " ↻" : ""}</div>`).join("")}
             </div>
           `).join("")}
         </div>

@@ -24,6 +24,21 @@
   #status { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
   .tab-btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
   .tab-btn.active { background: var(--ink); color: var(--paper); }
+  #showPastBtn { border: 1.5px solid var(--ink); background: var(--card); border-radius: 6px; padding: 8px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  #showPastBtn.active { background: var(--ink); color: var(--paper); }
+  .month-group-label { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--ink-soft); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .filter-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .filter-row input[type="text"] { flex: 1; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 14px; }
+
+  .month-header { font-family: 'IBM Plex Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+
+  .event-row { background: var(--card); border: 1.5px solid var(--ink); border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .event-row .edate { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); width: 90px; flex-shrink: 0; }
+  .event-row .etitle { flex: 1; font-weight: 600; font-size: 14px; }
+  .event-row .erepeat-tag { font-size: 12px; color: var(--forest); }
+  .event-row .quick-del { background: transparent; color: var(--brick); border: 1px solid var(--brick); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+  .event-row .caret { color: var(--ink-soft); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -64,6 +79,10 @@
           <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
         </div>
       </div>
+      <div class="row" style="margin-bottom:10px;">
+        <input id="eventSearch" placeholder="Search events…" style="flex:1;" oninput="onEventSearchInput(this.value)">
+        <button id="showPastBtn" onclick="toggleShowPastEvents()">Show past events</button>
+      </div>
       <div id="eventList"></div>
     </div>
   </div>
@@ -80,13 +99,13 @@
 
   // ---- Same config as chore-board.html ----
   const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -163,21 +182,40 @@
 
   // ---------- Events ----------
   let events = [];
+  let eventSearchText = "";
+  let showPastEvents = false;
 
   onSnapshot(eventsCol, (snap) => {
     events = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
-    document.getElementById("eventStatus").textContent = `${events.length} events`;
     renderEventList();
   });
 
+  window.onEventSearchInput = function (val) {
+    eventSearchText = val.trim().toLowerCase();
+    renderEventList();
+  };
+
+  window.toggleShowPastEvents = function () {
+    showPastEvents = !showPastEvents;
+    document.getElementById("showPastBtn").classList.toggle("active", showPastEvents);
+    document.getElementById("showPastBtn").textContent = showPastEvents ? "Hide past events" : "Show past events";
+    renderEventList();
+  };
+
   window.addBlankEvent = async function () {
-    await addDoc(eventsCol, {
-      title: "New event",
-      date: new Date().toISOString().slice(0, 10),
-      time: "",
-      notes: "",
-    });
+    try {
+      await addDoc(eventsCol, {
+        title: "New event",
+        date: new Date().toISOString().slice(0, 10),
+        time: "",
+        notes: "",
+        assignee: null,
+        durationMinutes: null,
+      });
+    } catch (err) {
+      alert("Couldn't add event: " + err.message);
+    }
   };
 
   window.saveEvent = async function (id) {
@@ -186,6 +224,9 @@
     const time = document.getElementById(`etime-${id}`).value;
     const notes = document.getElementById(`enotes-${id}`).value;
     const repeatType = document.getElementById(`erepeat-${id}`).value;
+    const assignee = document.getElementById(`eassignee-${id}`).value || null;
+    const durVal = document.getElementById(`edur-${id}`).value;
+    const durationMinutes = durVal ? Number(durVal) : null;
 
     let repeat = null;
     if (repeatType === "days") {
@@ -198,11 +239,20 @@
       repeat = { type: "years", value: Number(document.getElementById(`erval1-${id}`).value) };
     }
 
-    await updateDoc(doc(db, "events", id), { title, date, time, notes, repeat });
+    try {
+      await updateDoc(doc(db, "events", id), { title, date, time, notes, repeat, assignee, durationMinutes });
+    } catch (err) {
+      alert("Couldn't save event: " + err.message);
+    }
   };
 
   window.deleteEvent = async function (id) {
-    if (confirm("Delete this event?")) await deleteDoc(doc(db, "events", id));
+    if (!confirm("Delete this event?")) return;
+    try {
+      await deleteDoc(doc(db, "events", id));
+    } catch (err) {
+      alert("Couldn't delete event: " + err.message);
+    }
   };
 
   function eventRepeatFields(e) {
@@ -218,16 +268,24 @@
     return `<label>Every<input type="number" id="erval1-${id}" value="${r ? r.value : 1}" ${type === "none" ? "disabled" : ""}></label><div id="erval2-${id}" style="display:none;"></div>`;
   }
 
-  function renderEventList() {
-    document.getElementById("eventList").innerHTML = events.map(e => `
+  function eventCardHtml(e) {
+    return `
       <div class="card">
         <div class="row">
           <label>Title<input id="etitle-${e.id}" value="${e.title}"></label>
           <label>Date<input type="date" id="edate-${e.id}" value="${e.date}"></label>
           <label>Time (optional)<input type="time" id="etime-${e.id}" value="${e.time || ""}"></label>
+          <label>Duration (min, optional)<input type="number" id="edur-${e.id}" value="${e.durationMinutes || ""}" min="0" step="15"></label>
         </div>
         <div class="row">
           <label style="flex:1;">Notes<input id="enotes-${e.id}" value="${e.notes || ""}"></label>
+          <label>Assigned to
+            <select id="eassignee-${e.id}">
+              <option value="" ${!e.assignee ? "selected" : ""}>Unassigned</option>
+              <option value="Sarah" ${e.assignee === "Sarah" ? "selected" : ""}>Sarah</option>
+              <option value="Britt" ${e.assignee === "Britt" ? "selected" : ""}>Britt</option>
+            </select>
+          </label>
         </div>
         <div class="row">
           <label>Repeats
@@ -246,6 +304,43 @@
           <button class="save-btn" onclick="saveEvent('${e.id}')">Save</button>
         </div>
       </div>
+    `;
+  }
+
+  function renderEventList() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    let visible = events.filter(e => {
+      if (!showPastEvents && !e.repeat && e.date < todayStr) return false;
+      if (eventSearchText) {
+        const hay = (e.title + " " + (e.notes || "")).toLowerCase();
+        if (!hay.includes(eventSearchText)) return false;
+      }
+      return true;
+    });
+
+    document.getElementById("eventStatus").textContent = `${visible.length} of ${events.length} events`;
+
+    if (visible.length === 0) {
+      document.getElementById("eventList").innerHTML = `<div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink-soft); padding:10px 0;">No matching events.</div>`;
+      return;
+    }
+
+    // group by year-month, in date order
+    const groups = [];
+    let lastKey = null;
+    visible.forEach(e => {
+      const key = e.date.slice(0, 7); // YYYY-MM
+      if (key !== lastKey) {
+        groups.push({ key, label: new Date(e.date + "T00:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" }), items: [] });
+        lastKey = key;
+      }
+      groups[groups.length - 1].items.push(e);
+    });
+
+    document.getElementById("eventList").innerHTML = groups.map(g => `
+      <div class="month-group-label">${g.label}</div>
+      ${g.items.map(eventCardHtml).join("")}
     `).join("");
   }
 

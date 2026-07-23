@@ -97,3 +97,19 @@ function formatTime(time) {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
+
+function addMinutesToTime(time, minutes) {
+  const [h, m] = time.split(":").map(Number);
+  const total = (h * 60 + m + minutes + 1440) % 1440; // wrap within a day
+  const hh = Math.floor(total / 60);
+  const mm = total % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+// Returns "7:00 PM" or, if a duration is set, "7:00 – 8:30 PM"
+function formatEventTime(event) {
+  if (!event.time) return "";
+  if (!event.durationMinutes) return formatTime(event.time);
+  const end = addMinutesToTime(event.time, event.durationMinutes);
+  return `${formatTime(event.time)} – ${formatTime(end)}`;
+}
