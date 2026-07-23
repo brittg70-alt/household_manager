@@ -7,7 +7,9 @@
 function startOfWeek(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - d.getDay()); // back up to Sunday
+  const day = d.getDay(); // 0 = Sun ... 6 = Sat
+  const diff = day === 0 ? -6 : 1 - day; // back up to Monday
+  d.setDate(d.getDate() + diff);
   return d;
 }
 

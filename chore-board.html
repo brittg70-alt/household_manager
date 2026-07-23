@@ -85,30 +85,38 @@
   .month-evt.britt { background: var(--britt-tint); }
 
   /* Timetable week view */
-  .tt-wrap { border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--card); }
-  .tt-header-row, .tt-allday-row { display: grid; grid-template-columns: 56px repeat(7, 1fr); }
+  .tt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tt-wrap { border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--card); min-width: 520px; }
+  .tt-header-row, .tt-allday-row { display: grid; grid-template-columns: 42px repeat(7, minmax(60px, 1fr)); }
   .tt-header-row { border-bottom: 1.5px solid var(--ink); }
-  .tt-allday-row { border-bottom: 1.5px solid var(--line); min-height: 28px; }
+  .tt-allday-row { border-bottom: 1.5px solid var(--line); min-height: 22px; }
   .tt-corner { border-right: 1px solid var(--line); }
-  .tt-day-header { text-align: center; padding: 8px 4px; border-left: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; }
-  .tt-day-header .dh-name { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; }
-  .tt-day-header .dh-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 18px; }
+  .tt-day-header { text-align: center; padding: 5px 2px; border-left: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; }
+  .tt-day-header .dh-name { font-size: 9.5px; color: var(--ink-soft); text-transform: uppercase; }
+  .tt-day-header .dh-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 14px; }
   .tt-day-header.today { background: var(--forest-tint); }
-  .tt-allday-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); padding: 4px; border-right: 1px solid var(--line); }
-  .tt-allday-cell { border-left: 1px solid var(--line); padding: 3px; }
-  .tt-allday-evt { font-size: 11px; border-radius: 4px; padding: 2px 5px; margin-bottom: 2px; background: var(--unassigned-tint); }
+  .tt-allday-label { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: var(--ink-soft); padding: 3px 2px; border-right: 1px solid var(--line); }
+  .tt-allday-cell { border-left: 1px solid var(--line); padding: 2px; }
+  .tt-allday-evt { font-size: 10px; border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; background: var(--unassigned-tint); }
   .tt-allday-evt.sarah { background: var(--sarah-tint); }
   .tt-allday-evt.britt { background: var(--britt-tint); }
 
-  .tt-body { display: grid; grid-template-columns: 56px repeat(7, 1fr); max-height: 560px; overflow-y: auto; }
+  .tt-body { display: grid; grid-template-columns: 42px repeat(7, minmax(60px, 1fr)); max-height: 62vh; overflow-y: auto; }
   .tt-hours-col { border-right: 1px solid var(--line); }
-  .tt-hour-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); text-align: right; padding-right: 6px; box-sizing: border-box; transform: translateY(-6px); }
+  .tt-hour-label { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: var(--ink-soft); text-align: right; padding-right: 4px; box-sizing: border-box; transform: translateY(-6px); }
   .tt-day-col { position: relative; border-left: 1px solid var(--line); }
   .tt-day-col.today { background: rgba(63,90,68,0.05); }
-  .tt-evt-block { position: absolute; left: 3px; right: 3px; border-radius: 5px; border-left: 3px solid var(--unassigned); background: var(--unassigned-tint); font-size: 11px; padding: 3px 5px; overflow: hidden; box-sizing: border-box; }
+  .tt-evt-block { position: absolute; left: 2px; right: 2px; border-radius: 4px; border-left: 3px solid var(--unassigned); background: var(--unassigned-tint); font-size: 9.5px; line-height: 1.2; padding: 2px 4px; overflow: hidden; box-sizing: border-box; }
   .tt-evt-block.sarah { border-left-color: var(--sarah); background: var(--sarah-tint); }
   .tt-evt-block.britt { border-left-color: var(--britt); background: var(--britt-tint); }
-  .tt-evt-block .tt-evt-time { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--ink-soft); }
+  .tt-evt-block .tt-evt-time { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: var(--ink-soft); }
+
+  @media (max-width: 700px) {
+    .wrap { padding: 16px 12px 40px; }
+    h1 { font-size: 30px; }
+    .tt-day-header .dh-num { font-size: 12px; }
+    .tt-hour-label { font-size: 8px; }
+  }
 </style>
 </head>
 <body>
@@ -164,14 +172,14 @@
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // ---- Fill these in from Firebase Console > Project Settings > General ----
- const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -220,9 +228,9 @@
     return "";
   }
 
-  const TT_START_HOUR = 6;   // 6 AM
-  const TT_END_HOUR = 22;    // 10 PM
-  const TT_PX_PER_HOUR = 48;
+  const TT_START_HOUR = 7;   // 7 AM
+  const TT_END_HOUR = 21;    // 9 PM
+  const TT_PX_PER_HOUR = 34;
 
   function timeToMinutes(time) {
     const [h, m] = time.split(":").map(Number);
@@ -249,6 +257,7 @@
       for (let h = TT_START_HOUR; h < TT_END_HOUR; h++) hours.push(h);
 
       document.getElementById("calGrid").innerHTML = `
+        <div class="tt-scroll">
         <div class="tt-wrap">
           <div class="tt-header-row">
             <div class="tt-corner"></div>
@@ -268,7 +277,7 @@
               `).join("")}</div>`;
             }).join("")}
           </div>
-          <div class="tt-body" style="height:${Math.min(totalHeight, 560)}px;">
+          <div class="tt-body">
             <div class="tt-hours-col" style="height:${totalHeight}px;">
               ${hours.map(h => `<div class="tt-hour-label" style="height:${TT_PX_PER_HOUR}px;">${hourLabel(h)}</div>`).join("")}
             </div>
@@ -279,10 +288,10 @@
                   ${timed.map(o => {
                     const startMin = timeToMinutes(o.event.time);
                     const rangeStartMin = TT_START_HOUR * 60, rangeEndMin = TT_END_HOUR * 60;
-                    const durMin = o.event.durationMinutes || 30;
+                    const durMin = o.event.durationMinutes || 60;
                     const top = Math.max(0, ((startMin - rangeStartMin) / 60) * TT_PX_PER_HOUR);
                     const rawHeight = (durMin / 60) * TT_PX_PER_HOUR;
-                    const height = Math.max(18, Math.min(rawHeight, totalHeight - top));
+                    const height = Math.max(15, Math.min(rawHeight, totalHeight - top));
                     if (startMin >= rangeEndMin || startMin + durMin <= rangeStartMin) return ""; // fully outside visible hours
                     return `
                       <div class="tt-evt-block ${assigneeClass(o.event.assignee)}" style="top:${top}px; height:${height}px;">
@@ -295,6 +304,7 @@
             }).join("")}
           </div>
         </div>
+        </div>
       `;
     } else {
       const cells = buildMonthDays(calOffset);
@@ -302,7 +312,7 @@
       const occurrences = expandOccurrences(currentEvents, rangeStart, rangeEnd);
       const monthLabel = new Date(cells[14].date).toLocaleDateString(undefined, { month: "long", year: "numeric" });
       document.getElementById("calTitle").textContent = monthLabel;
-      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       document.getElementById("calGrid").innerHTML = `
         <div class="month-grid">
           ${dayNames.map(n => `<div class="month-headcell">${n}</div>`).join("")}
