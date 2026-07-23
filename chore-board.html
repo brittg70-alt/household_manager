@@ -86,36 +86,34 @@
 
   /* Timetable week view */
   .tt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .tt-wrap { border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--card); min-width: 520px; }
-  .tt-header-row, .tt-allday-row { display: grid; grid-template-columns: 42px repeat(7, minmax(60px, 1fr)); }
+  .tt-wrap { border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--card); min-width: 560px; }
+  .tt-header-row, .tt-allday-row { display: grid; grid-template-columns: 50px repeat(7, minmax(66px, 1fr)); }
   .tt-header-row { border-bottom: 1.5px solid var(--ink); }
-  .tt-allday-row { border-bottom: 1.5px solid var(--line); min-height: 22px; }
+  .tt-allday-row { border-bottom: 1.5px solid var(--line); min-height: 26px; }
   .tt-corner { border-right: 1px solid var(--line); }
-  .tt-day-header { text-align: center; padding: 5px 2px; border-left: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; }
-  .tt-day-header .dh-name { font-size: 9.5px; color: var(--ink-soft); text-transform: uppercase; }
-  .tt-day-header .dh-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 14px; }
+  .tt-day-header { text-align: center; padding: 7px 3px; border-left: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; }
+  .tt-day-header .dh-name { font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; }
+  .tt-day-header .dh-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 17px; }
   .tt-day-header.today { background: var(--forest-tint); }
-  .tt-allday-label { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: var(--ink-soft); padding: 3px 2px; border-right: 1px solid var(--line); }
-  .tt-allday-cell { border-left: 1px solid var(--line); padding: 2px; }
-  .tt-allday-evt { font-size: 10px; border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; background: var(--unassigned-tint); }
+  .tt-allday-label { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: var(--ink-soft); padding: 4px; border-right: 1px solid var(--line); }
+  .tt-allday-cell { border-left: 1px solid var(--line); padding: 3px; }
+  .tt-allday-evt { font-size: 11px; border-radius: 4px; padding: 2px 5px; margin-bottom: 2px; background: var(--unassigned-tint); }
   .tt-allday-evt.sarah { background: var(--sarah-tint); }
   .tt-allday-evt.britt { background: var(--britt-tint); }
 
-  .tt-body { display: grid; grid-template-columns: 42px repeat(7, minmax(60px, 1fr)); max-height: 62vh; overflow-y: auto; }
+  .tt-body { display: grid; grid-template-columns: 50px repeat(7, minmax(66px, 1fr)); max-height: 60vh; overflow-y: auto; }
   .tt-hours-col { border-right: 1px solid var(--line); }
-  .tt-hour-label { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: var(--ink-soft); text-align: right; padding-right: 4px; box-sizing: border-box; transform: translateY(-6px); }
+  .tt-hour-label { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: var(--ink-soft); text-align: right; padding-right: 5px; box-sizing: border-box; transform: translateY(-6px); }
   .tt-day-col { position: relative; border-left: 1px solid var(--line); }
   .tt-day-col.today { background: rgba(63,90,68,0.05); }
-  .tt-evt-block { position: absolute; left: 2px; right: 2px; border-radius: 4px; border-left: 3px solid var(--unassigned); background: var(--unassigned-tint); font-size: 9.5px; line-height: 1.2; padding: 2px 4px; overflow: hidden; box-sizing: border-box; }
+  .tt-evt-block { position: absolute; left: 3px; right: 3px; border-radius: 5px; border-left: 3px solid var(--unassigned); background: var(--unassigned-tint); font-size: 10.5px; line-height: 1.25; padding: 3px 5px; overflow: hidden; box-sizing: border-box; }
   .tt-evt-block.sarah { border-left-color: var(--sarah); background: var(--sarah-tint); }
   .tt-evt-block.britt { border-left-color: var(--britt); background: var(--britt-tint); }
-  .tt-evt-block .tt-evt-time { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: var(--ink-soft); }
+  .tt-evt-block .tt-evt-time { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: var(--ink-soft); }
 
   @media (max-width: 700px) {
     .wrap { padding: 16px 12px 40px; }
     h1 { font-size: 30px; }
-    .tt-day-header .dh-num { font-size: 12px; }
-    .tt-hour-label { font-size: 8px; }
   }
 </style>
 </head>
@@ -161,8 +159,8 @@
   <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
 </div>
 
-<script src="recurrence.js"></script>
-<script src="calendar.js"></script>
+<script src="recurrence.js?v=2"></script>
+<script src="calendar.js?v=2"></script>
 
 <!-- Firebase (modular SDK via CDN) -->
 <script type="module">
@@ -228,9 +226,10 @@ const firebaseConfig = {
     return "";
   }
 
-  const TT_START_HOUR = 7;   // 7 AM
-  const TT_END_HOUR = 21;    // 9 PM
-  const TT_PX_PER_HOUR = 34;
+  const TT_START_HOUR = 0;   // full day — nothing gets excluded
+  const TT_END_HOUR = 24;
+  const TT_PX_PER_HOUR = 42;
+  const TT_DEFAULT_SCROLL_HOUR = 7; // grid opens scrolled to ~7 AM, but all 24h are reachable
 
   function timeToMinutes(time) {
     const [h, m] = time.split(":").map(Number);
@@ -306,6 +305,8 @@ const firebaseConfig = {
         </div>
         </div>
       `;
+      const ttBody = document.querySelector("#calGrid .tt-body");
+      if (ttBody) ttBody.scrollTop = TT_DEFAULT_SCROLL_HOUR * TT_PX_PER_HOUR;
     } else {
       const cells = buildMonthDays(calOffset);
       const rangeStart = cells[0].date, rangeEnd = new Date(cells[41].date); rangeEnd.setHours(23, 59, 59, 999);
