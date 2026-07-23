@@ -83,6 +83,32 @@
   .month-evt { font-size: 11px; background: var(--unassigned-tint); border-radius: 4px; padding: 1px 4px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .month-evt.sarah { background: var(--sarah-tint); }
   .month-evt.britt { background: var(--britt-tint); }
+
+  /* Timetable week view */
+  .tt-wrap { border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .tt-header-row, .tt-allday-row { display: grid; grid-template-columns: 56px repeat(7, 1fr); }
+  .tt-header-row { border-bottom: 1.5px solid var(--ink); }
+  .tt-allday-row { border-bottom: 1.5px solid var(--line); min-height: 28px; }
+  .tt-corner { border-right: 1px solid var(--line); }
+  .tt-day-header { text-align: center; padding: 8px 4px; border-left: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; }
+  .tt-day-header .dh-name { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; }
+  .tt-day-header .dh-num { font-family: 'Fraunces', serif; font-weight: 700; font-size: 18px; }
+  .tt-day-header.today { background: var(--forest-tint); }
+  .tt-allday-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); padding: 4px; border-right: 1px solid var(--line); }
+  .tt-allday-cell { border-left: 1px solid var(--line); padding: 3px; }
+  .tt-allday-evt { font-size: 11px; border-radius: 4px; padding: 2px 5px; margin-bottom: 2px; background: var(--unassigned-tint); }
+  .tt-allday-evt.sarah { background: var(--sarah-tint); }
+  .tt-allday-evt.britt { background: var(--britt-tint); }
+
+  .tt-body { display: grid; grid-template-columns: 56px repeat(7, 1fr); max-height: 560px; overflow-y: auto; }
+  .tt-hours-col { border-right: 1px solid var(--line); }
+  .tt-hour-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); text-align: right; padding-right: 6px; box-sizing: border-box; transform: translateY(-6px); }
+  .tt-day-col { position: relative; border-left: 1px solid var(--line); }
+  .tt-day-col.today { background: rgba(63,90,68,0.05); }
+  .tt-evt-block { position: absolute; left: 3px; right: 3px; border-radius: 5px; border-left: 3px solid var(--unassigned); background: var(--unassigned-tint); font-size: 11px; padding: 3px 5px; overflow: hidden; box-sizing: border-box; }
+  .tt-evt-block.sarah { border-left-color: var(--sarah); background: var(--sarah-tint); }
+  .tt-evt-block.britt { border-left-color: var(--britt); background: var(--britt-tint); }
+  .tt-evt-block .tt-evt-time { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--ink-soft); }
 </style>
 </head>
 <body>
@@ -138,8 +164,7 @@
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // ---- Fill these in from Firebase Console > Project Settings > General ----
-// Your web app's Firebase configuration
-const firebaseConfig = {
+ const firebaseConfig = {
   apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
   authDomain: "household-manager-4de34.firebaseapp.com",
   projectId: "household-manager-4de34",
@@ -195,6 +220,21 @@ const firebaseConfig = {
     return "";
   }
 
+  const TT_START_HOUR = 6;   // 6 AM
+  const TT_END_HOUR = 22;    // 10 PM
+  const TT_PX_PER_HOUR = 48;
+
+  function timeToMinutes(time) {
+    const [h, m] = time.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function hourLabel(h) {
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12} ${period}`;
+  }
+
   function renderCalendar() {
     const today = new Date();
     if (calMode === "week") {
@@ -203,17 +243,57 @@ const firebaseConfig = {
       const occurrences = expandOccurrences(currentEvents, rangeStart, rangeEnd);
       document.getElementById("calTitle").textContent =
         `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+
+      const totalHeight = (TT_END_HOUR - TT_START_HOUR) * TT_PX_PER_HOUR;
+      const hours = [];
+      for (let h = TT_START_HOUR; h < TT_END_HOUR; h++) hours.push(h);
+
       document.getElementById("calGrid").innerHTML = `
-        <div class="week-grid">
-          ${days.map(d => `
-            <div class="day-col ${isSameDay(d, today) ? "today" : ""}">
-              <div class="day-head">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>
-              <div class="day-num">${d.getDate()}</div>
-              ${occurrencesOnDate(occurrences, d).map(o => `
-                <div class="evt ${assigneeClass(o.event.assignee)}">${o.event.time ? `<span class="t">${formatEventTime(o.event)}</span>` : ""}${o.event.title}${o.event.repeat ? " ↻" : ""}</div>
-              `).join("") || ""}
+        <div class="tt-wrap">
+          <div class="tt-header-row">
+            <div class="tt-corner"></div>
+            ${days.map(d => `
+              <div class="tt-day-header ${isSameDay(d, today) ? "today" : ""}">
+                <div class="dh-name">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>
+                <div class="dh-num">${d.getDate()}</div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="tt-allday-row">
+            <div class="tt-allday-label">All day</div>
+            ${days.map(d => {
+              const allDay = occurrencesOnDate(occurrences, d).filter(o => !o.event.time);
+              return `<div class="tt-allday-cell">${allDay.map(o => `
+                <div class="tt-allday-evt ${assigneeClass(o.event.assignee)}">${o.event.title}${o.event.repeat ? " ↻" : ""}</div>
+              `).join("")}</div>`;
+            }).join("")}
+          </div>
+          <div class="tt-body" style="height:${Math.min(totalHeight, 560)}px;">
+            <div class="tt-hours-col" style="height:${totalHeight}px;">
+              ${hours.map(h => `<div class="tt-hour-label" style="height:${TT_PX_PER_HOUR}px;">${hourLabel(h)}</div>`).join("")}
             </div>
-          `).join("")}
+            ${days.map(d => {
+              const timed = occurrencesOnDate(occurrences, d).filter(o => o.event.time);
+              return `
+                <div class="tt-day-col ${isSameDay(d, today) ? "today" : ""}" style="height:${totalHeight}px; background-image: repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent ${TT_PX_PER_HOUR}px);">
+                  ${timed.map(o => {
+                    const startMin = timeToMinutes(o.event.time);
+                    const rangeStartMin = TT_START_HOUR * 60, rangeEndMin = TT_END_HOUR * 60;
+                    const durMin = o.event.durationMinutes || 30;
+                    const top = Math.max(0, ((startMin - rangeStartMin) / 60) * TT_PX_PER_HOUR);
+                    const rawHeight = (durMin / 60) * TT_PX_PER_HOUR;
+                    const height = Math.max(18, Math.min(rawHeight, totalHeight - top));
+                    if (startMin >= rangeEndMin || startMin + durMin <= rangeStartMin) return ""; // fully outside visible hours
+                    return `
+                      <div class="tt-evt-block ${assigneeClass(o.event.assignee)}" style="top:${top}px; height:${height}px;">
+                        <span class="tt-evt-time">${formatEventTime(o.event)}</span>${o.event.title}${o.event.repeat ? " ↻" : ""}
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+              `;
+            }).join("")}
+          </div>
         </div>
       `;
     } else {
