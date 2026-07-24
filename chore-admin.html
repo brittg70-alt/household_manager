@@ -6,10 +6,10 @@
 <title>House Hub – Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-  :root { --paper:#EDE6D6; --card:#FBF8F0; --ink:#2B2E26; --ink-soft:#5C6156; --line:#DCD3BE; --forest:#3F5A44; --brick:#A8452E; }
+  :root { --paper:#EDE6D6; --card:#FBF8F0; --ink:#2B2E26; --ink-soft:#5C6156; --line:#DCD3BE; --forest:#3F5A44; --forest-tint:#E3E9E1; --brick:#A8452E; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--paper); color:var(--ink); font-family:'Inter',sans-serif; padding: 20px 16px 60px; }
-  .wrap { max-width: 640px; margin: 0 auto; }
+  .wrap { max-width: 720px; margin: 0 auto; }
   h1 { font-family:'Fraunces',serif; font-size: 28px; margin: 0 0 4px; }
   p.sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 20px; }
   .gate { background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 20px; }
@@ -30,6 +30,17 @@
   #showPastBtn { border: 1.5px solid var(--ink); background: var(--card); border-radius: 6px; padding: 8px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer; white-space: nowrap; }
   #showPastBtn.active { background: var(--ink); color: var(--paper); }
   .month-group-label { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--ink-soft); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .meal-grid { display: grid; grid-template-columns: 84px repeat(7, 1fr); gap: 1px; background: var(--line); border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; }
+  .meal-headcell { background: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-align: center; padding: 8px 3px; font-weight: 600; }
+  .meal-headcell.today { background: var(--forest-tint); }
+  .meal-rowlabel { background: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); display: flex; align-items: center; padding: 8px; text-transform: uppercase; }
+  .meal-cell { background: var(--card); padding: 6px; font-size: 12px; min-height: 40px; }
+  .meal-cell.today { background: var(--forest-tint); }
+  .shop-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+  .shop-item.checked { color: var(--ink-soft); text-decoration: line-through; }
+  .shop-check { width: 19px; height: 19px; accent-color: var(--forest); }
+  .meal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .meal-grid { min-width: 560px; }
 
   .filter-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
   .filter-row input[type="text"] { flex: 1; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 14px; }
@@ -61,6 +72,7 @@
     <div class="tabs" style="display:flex; gap:8px; margin-bottom:16px;">
       <button class="tab-btn active" id="tabChoresAdmin" onclick="switchAdminTab('chores')">Chores</button>
       <button class="tab-btn" id="tabEventsAdmin" onclick="switchAdminTab('events')">Events</button>
+      <button class="tab-btn" id="tabMealAdmin" onclick="switchAdminTab('meal')">Meal Planning</button>
     </div>
 
     <div id="choresAdmin">
@@ -88,6 +100,25 @@
       </div>
       <div id="eventList"></div>
     </div>
+
+    <div id="mealAdmin" style="display:none;">
+      <div class="cal-toolbar" style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <button onclick="mealAdminNav(-1)">&larr; Prev</button>
+        <div style="flex:1; font-family:'Fraunces',serif; font-weight:600; font-size:16px;" id="mealAdminWeekTitle"></div>
+        <button onclick="mealAdminNav(1)">Next &rarr;</button>
+        <button onclick="mealAdminToday()">This week</button>
+      </div>
+      <div id="mealAdminGrid" style="margin-bottom:26px;"></div>
+
+      <div class="toolbar">
+        <span id="shopStatus"></span>
+        <div>
+          <button class="add-btn" onclick="addBlankShoppingItem()">+ Add item</button>
+          <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
+        </div>
+      </div>
+      <div id="shopAdminList"></div>
+    </div>
   </div>
 </div>
 
@@ -95,10 +126,12 @@
   <div class="modal-box" id="modalBox"></div>
 </div>
 
+<script src="calendar.js?v=1"></script>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {
-    getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc
+    getFirestore, collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, setDoc
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import {
     getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
@@ -119,12 +152,16 @@ const firebaseConfig = {
   const auth = getAuth(app);
   const choresCol = collection(db, "chores");
   const eventsCol = collection(db, "events");
+  const mealPlanCol = collection(db, "mealPlan");
+  const shoppingCol = collection(db, "shoppingItems");
 
   window.switchAdminTab = function (tab) {
     document.getElementById("tabChoresAdmin").classList.toggle("active", tab === "chores");
     document.getElementById("tabEventsAdmin").classList.toggle("active", tab === "events");
+    document.getElementById("tabMealAdmin").classList.toggle("active", tab === "meal");
     document.getElementById("choresAdmin").style.display = tab === "chores" ? "block" : "none";
     document.getElementById("eventsAdmin").style.display = tab === "events" ? "block" : "none";
+    document.getElementById("mealAdmin").style.display = tab === "meal" ? "block" : "none";
   };
 
   window.doLogin = async function () {
@@ -445,6 +482,13 @@ const firebaseConfig = {
     showModal();
   };
 
+  window.openShoppingModal = function (item) {
+    modalKind = "shopping";
+    modalDraft = JSON.parse(JSON.stringify(item));
+    renderModal();
+    showModal();
+  };
+
   window.modalChoreTypeChange = function (newType) {
     modalDraft.repeat = newType === "rate" ? { type: "rate", times: 6, perDays: 10 } : { type: newType, value: 1 };
     renderModal();
@@ -538,6 +582,18 @@ const firebaseConfig = {
           <button class="save-btn" onclick="saveModalEvent()">Save & close</button>
         </div>
       `;
+    } else if (modalKind === "shopping") {
+      const s = modalDraft;
+      box.innerHTML = `
+        <div class="modal-title">New shopping item</div>
+        <div class="row">
+          <label style="flex:1;">Item<input id="m-stext" value="${s.text}"></label>
+        </div>
+        <div class="row" style="justify-content:flex-end; margin-top:10px;">
+          <button class="del-btn" onclick="deleteShoppingItem('${s.id}'); closeModal();">Delete</button>
+          <button class="save-btn" onclick="saveModalShopping()">Save & close</button>
+        </div>
+      `;
     }
   }
 
@@ -586,6 +642,127 @@ const firebaseConfig = {
       alert("Couldn't save event: " + err.message);
     }
   };
+
+  // ---------- Meal planning ----------
+  const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
+  const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
+
+  let mealPlanAdmin = [];
+  let mealAdminWeekOffset = 0;
+  let shoppingItemsAdmin = [];
+
+  onSnapshot(mealPlanCol, (snap) => {
+    mealPlanAdmin = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMealAdminGrid();
+  });
+
+  onSnapshot(shoppingCol, (snap) => {
+    shoppingItemsAdmin = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById("shopStatus").textContent = `${shoppingItemsAdmin.length} items`;
+    renderShopAdminList();
+  });
+
+  window.mealAdminNav = function (dir) {
+    mealAdminWeekOffset += dir;
+    renderMealAdminGrid();
+  };
+
+  window.mealAdminToday = function () {
+    mealAdminWeekOffset = 0;
+    renderMealAdminGrid();
+  };
+
+  function findMealTitle(dateStr, type) {
+    const m = mealPlanAdmin.find(m => m.date === dateStr && m.mealType === type);
+    return m && m.title ? m.title : "";
+  }
+
+  window.saveMealCell = async function (dateStr, mealType, value) {
+    try {
+      await setDoc(doc(db, "mealPlan", `${dateStr}_${mealType}`), { date: dateStr, mealType, title: value }, { merge: true });
+    } catch (err) {
+      alert("Couldn't save meal: " + err.message);
+    }
+  };
+
+  function renderMealAdminGrid() {
+    const days = buildWeekDays(mealAdminWeekOffset);
+    const today = new Date();
+    document.getElementById("mealAdminWeekTitle").textContent =
+      `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+
+    document.getElementById("mealAdminGrid").innerHTML = `
+      <div class="meal-scroll">
+      <div class="meal-grid">
+        <div class="meal-headcell"></div>
+        ${days.map(d => `<div class="meal-headcell ${isSameDay(d, today) ? "today" : ""}">${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}</div>`).join("")}
+        ${MEAL_TYPES.map(type => `
+          <div class="meal-rowlabel">${MEAL_LABELS[type]}</div>
+          ${days.map(d => {
+            const dateStr = isoDate(d);
+            const title = findMealTitle(dateStr, type);
+            return `<div class="meal-cell ${isSameDay(d, today) ? "today" : ""}"><input value="${title}" placeholder="—" style="width:100%; border:none; background:transparent; font-size:12px; font-family:'Inter',sans-serif;" onchange="saveMealCell('${dateStr}','${type}', this.value)"></div>`;
+          }).join("")}
+        `).join("")}
+      </div>
+      </div>
+    `;
+  }
+
+  window.addBlankShoppingItem = async function () {
+    const draft = { text: "New item", checked: false };
+    try {
+      const docRef = await addDoc(shoppingCol, draft);
+      openShoppingModal({ id: docRef.id, ...draft });
+    } catch (err) {
+      alert("Couldn't add item: " + err.message);
+    }
+  };
+
+  window.toggleShoppingItem = async function (id, checked) {
+    try {
+      await updateDoc(doc(db, "shoppingItems", id), { checked });
+    } catch (err) {
+      alert("Couldn't update item: " + err.message);
+    }
+  };
+
+  window.deleteShoppingItem = async function (id) {
+    if (!confirm("Delete this item?")) return;
+    try {
+      await deleteDoc(doc(db, "shoppingItems", id));
+    } catch (err) {
+      alert("Couldn't delete item: " + err.message);
+    }
+  };
+
+  window.saveModalShopping = async function () {
+    const id = modalDraft.id;
+    const text = document.getElementById("m-stext").value;
+    try {
+      await updateDoc(doc(db, "shoppingItems", id), { text });
+      closeModal();
+    } catch (err) {
+      alert("Couldn't save item: " + err.message);
+    }
+  };
+
+  window.openShoppingModalById = function (id) {
+    const item = shoppingItemsAdmin.find(i => i.id === id);
+    if (item) openShoppingModal(item);
+  };
+
+  function renderShopAdminList() {
+    const sorted = [...shoppingItemsAdmin].sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1));
+    document.getElementById("shopAdminList").innerHTML = sorted.length
+      ? sorted.map(item => `
+          <div class="shop-item ${item.checked ? "checked" : ""}">
+            <input type="checkbox" class="shop-check" ${item.checked ? "checked" : ""} onchange="toggleShoppingItem('${item.id}', this.checked)">
+            <span style="flex:1; cursor:pointer;" onclick="openShoppingModalById('${item.id}')">${item.text}</span>
+          </div>
+        `).join("")
+      : `<div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink-soft); padding:10px 0;">No items yet.</div>`;
+  }
 </script>
 </body>
 </html>

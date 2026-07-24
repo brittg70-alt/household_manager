@@ -120,6 +120,21 @@
   .tt-evt-block.britt { border-left-color: var(--britt); background: var(--britt-tint); }
   .tt-evt-block .tt-evt-time { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: var(--ink-soft); }
 
+  /* Meal planning */
+  .meal-grid { display: grid; grid-template-columns: 84px repeat(7, 1fr); gap: 1px; background: var(--line); border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; }
+  .meal-headcell { background: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-align: center; padding: 8px 3px; font-weight: 600; }
+  .meal-headcell.today { background: var(--forest-tint); }
+  .meal-rowlabel { background: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); display: flex; align-items: center; padding: 8px; text-transform: uppercase; }
+  .meal-cell { background: var(--card); padding: 8px 6px; font-size: 12px; min-height: 44px; }
+  .meal-cell.today { background: var(--forest-tint); }
+  .meal-cell .empty-dash { color: var(--line); }
+
+  .shop-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+  .shop-item.checked { color: var(--ink-soft); text-decoration: line-through; }
+  .shop-check { width: 19px; height: 19px; accent-color: var(--forest); }
+  .meal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .meal-grid { min-width: 560px; }
+
   @media (max-width: 700px) {
     .wrap { padding: 16px 12px 40px; }
     h1 { font-size: 30px; }
@@ -134,6 +149,7 @@
       <div class="primary-nav">
         <button class="primary-nav-btn active" id="tabChores" onclick="switchTab('chores')">Chores</button>
         <button class="primary-nav-btn" id="tabCalendar" onclick="switchTab('calendar')">Calendar</button>
+        <button class="primary-nav-btn" id="tabMeal" onclick="switchTab('meal')">Meal Planning</button>
       </div>
     </div>
     <div class="datebox"><div id="dateBox"></div><div id="connStatus">connecting…</div></div>
@@ -168,11 +184,24 @@
     <div id="calGrid"></div>
   </div>
 
+  <div id="mealView" style="display:none;">
+    <div class="cal-toolbar">
+      <button onclick="mealNav(-1)">&larr; Prev</button>
+      <div class="cal-title" id="mealWeekTitle"></div>
+      <button onclick="mealNav(1)">Next &rarr;</button>
+      <button onclick="mealToday()">This week</button>
+    </div>
+    <div id="mealGrid"></div>
+
+    <div class="section-label" style="margin-top:26px;">Shopping List<div class="dash"></div></div>
+    <div id="shoppingList"></div>
+  </div>
+
   <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
 </div>
 
-<script src="recurrence.js?v=5"></script>
-<script src="calendar.js?v=5"></script>
+<script src="recurrence.js?v=6"></script>
+<script src="calendar.js?v=6"></script>
 
 <!-- Firebase (modular SDK via CDN) -->
 <script type="module">
@@ -195,23 +224,41 @@ const firebaseConfig = {
   const db = getFirestore(app);
   const choresCol = collection(db, "chores");
   const eventsCol = collection(db, "events");
+  const mealPlanCol = collection(db, "mealPlan");
+  const shoppingCol = collection(db, "shoppingItems");
 
   let currentChores = [];
   let currentEvents = [];
+  let currentMealPlan = [];
+  let currentShopping = [];
   let calMode = "week"; // "schedule" (timetable) | "week" (simple list) | "month"
   let calOffset = 0;        // weeks or months from current, depending on calMode
+  let mealWeekOffset = 0;
 
   onSnapshot(eventsCol, (snapshot) => {
     currentEvents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCalendar(); // always keep the grid in sync with the latest data, regardless of which tab is showing
   });
 
+  onSnapshot(mealPlanCol, (snapshot) => {
+    currentMealPlan = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMeal();
+  });
+
+  onSnapshot(shoppingCol, (snapshot) => {
+    currentShopping = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMeal();
+  });
+
   window.switchTab = function (tab) {
     document.getElementById("tabChores").classList.toggle("active", tab === "chores");
     document.getElementById("tabCalendar").classList.toggle("active", tab === "calendar");
+    document.getElementById("tabMeal").classList.toggle("active", tab === "meal");
     document.getElementById("choresView").style.display = tab === "chores" ? "block" : "none";
     document.getElementById("calendarView").style.display = tab === "calendar" ? "block" : "none";
+    document.getElementById("mealView").style.display = tab === "meal" ? "block" : "none";
     if (tab === "calendar") renderCalendar();
+    if (tab === "meal") renderMeal();
   };
 
   window.switchCalMode = function (mode) {
@@ -440,6 +487,66 @@ const firebaseConfig = {
   }
 
   setInterval(render, 60 * 1000); // recompute status even if no new writes come in
+
+  // ---------- Meal planning ----------
+  const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
+  const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
+
+  window.mealNav = function (dir) {
+    mealWeekOffset += dir;
+    renderMeal();
+  };
+
+  window.mealToday = function () {
+    mealWeekOffset = 0;
+    renderMeal();
+  };
+
+  window.toggleShoppingItem = async function (id, checked) {
+    try {
+      await updateDoc(doc(db, "shoppingItems", id), { checked });
+    } catch (err) {
+      alert("Couldn't update item: " + err.message);
+    }
+  };
+
+  function findMealTitle(dateStr, type) {
+    const m = currentMealPlan.find(m => m.date === dateStr && m.mealType === type);
+    return m && m.title ? m.title : "";
+  }
+
+  function renderMeal() {
+    const today = new Date();
+    const days = buildWeekDays(mealWeekOffset);
+    document.getElementById("mealWeekTitle").textContent =
+      `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+
+    document.getElementById("mealGrid").innerHTML = `
+      <div class="meal-scroll">
+      <div class="meal-grid">
+        <div class="meal-headcell"></div>
+        ${days.map(d => `<div class="meal-headcell ${isSameDay(d, today) ? "today" : ""}">${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}</div>`).join("")}
+        ${MEAL_TYPES.map(type => `
+          <div class="meal-rowlabel">${MEAL_LABELS[type]}</div>
+          ${days.map(d => {
+            const title = findMealTitle(isoDate(d), type);
+            return `<div class="meal-cell ${isSameDay(d, today) ? "today" : ""}">${title || '<span class="empty-dash">—</span>'}</div>`;
+          }).join("")}
+        `).join("")}
+      </div>
+      </div>
+    `;
+
+    const sorted = [...currentShopping].sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1));
+    document.getElementById("shoppingList").innerHTML = sorted.length
+      ? sorted.map(item => `
+          <div class="shop-item ${item.checked ? "checked" : ""}">
+            <input type="checkbox" class="shop-check" ${item.checked ? "checked" : ""} onchange="toggleShoppingItem('${item.id}', this.checked)">
+            <span>${item.text}</span>
+          </div>
+        `).join("")
+      : `<div class="empty">Nothing on the list.</div>`;
+  }
 </script>
 </body>
 </html>
