@@ -40,9 +40,18 @@ function getStatus(chore, today = new Date()) {
   const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
   const diffDays = Math.round((dueDay - midnight) / 86400000);
 
+  // Rate-based chores ("X times per Y days") represent a flexible window rather
+  // than one fixed deadline — widen how far ahead they surface as "soon" to
+  // match their own cadence, instead of only appearing the day before due.
+  let soonThreshold = 1;
+  if (chore.repeat.type === "rate") {
+    const intervalDays = chore.repeat.perDays / chore.repeat.times;
+    soonThreshold = Math.max(1, Math.ceil(intervalDays));
+  }
+
   let tier;
   if (diffDays < 0) tier = "overdue";
-  else if (diffDays <= 1) tier = "soon";
+  else if (diffDays <= soonThreshold) tier = "soon";
   else tier = "ontrack";
 
   return { due, diffDays, tier };
