@@ -25,8 +25,9 @@
     background-size: 22px 22px;
   }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
-  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid var(--ink); padding-bottom: 14px; margin-bottom: 22px; }
-  h1 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 40px; margin: 0; letter-spacing: -0.01em; }
+  header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--ink); padding-bottom: 14px; margin-bottom: 22px; flex-wrap: wrap; gap: 12px; }
+  .header-left { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  h1 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 34px; margin: 0; letter-spacing: -0.01em; }
   .datebox { text-align: right; font-family: 'IBM Plex Mono', monospace; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
   .summary { display: flex; gap: 10px; margin-bottom: 26px; flex-wrap: wrap; }
   .pill { font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--ink); display: flex; gap: 6px; align-items: center; }
@@ -59,8 +60,8 @@
   .tab-btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
   .tab-btn.active { background: var(--ink); color: var(--paper); }
 
-  .primary-nav { display: flex; gap: 10px; margin: 2px 0 26px; padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
-  .primary-nav-btn { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; padding: 10px 24px; border-radius: 9px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+  .primary-nav { display: flex; gap: 8px; }
+  .primary-nav-btn { font-family: 'Fraunces', serif; font-weight: 600; font-size: 14px; padding: 8px 18px; border-radius: 9px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
   .primary-nav-btn.active { background: var(--ink); color: var(--paper); box-shadow: 3px 3px 0 rgba(43,46,38,0.15); }
 
   .seg-group { display: inline-flex; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 10px; padding: 3px; gap: 3px; margin-bottom: 16px; }
@@ -128,13 +129,15 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>House Hub</h1>
+    <div class="header-left">
+      <h1>House Hub</h1>
+      <div class="primary-nav">
+        <button class="primary-nav-btn active" id="tabChores" onclick="switchTab('chores')">Chores</button>
+        <button class="primary-nav-btn" id="tabCalendar" onclick="switchTab('calendar')">Calendar</button>
+      </div>
+    </div>
     <div class="datebox"><div id="dateBox"></div><div id="connStatus">connecting…</div></div>
   </header>
-  <div class="primary-nav">
-    <button class="primary-nav-btn active" id="tabChores" onclick="switchTab('chores')">Chores</button>
-    <button class="primary-nav-btn" id="tabCalendar" onclick="switchTab('calendar')">Calendar</button>
-  </div>
 
   <div id="choresView">
     <div class="cal-toolbar" style="margin-bottom:10px;">
@@ -147,6 +150,7 @@
 
   <div id="calendarView" style="display:none;">
     <div class="seg-group">
+      <button class="seg-btn" id="tabSchedule" onclick="switchCalMode('schedule')">Schedule</button>
       <button class="seg-btn active" id="tabWeek" onclick="switchCalMode('week')">Week</button>
       <button class="seg-btn" id="tabMonth" onclick="switchCalMode('month')">Month</button>
     </div>
@@ -167,8 +171,8 @@
   <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
 </div>
 
-<script src="recurrence.js?v=3"></script>
-<script src="calendar.js?v=3"></script>
+<script src="recurrence.js?v=5"></script>
+<script src="calendar.js?v=5"></script>
 
 <!-- Firebase (modular SDK via CDN) -->
 <script type="module">
@@ -178,14 +182,14 @@
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // ---- Fill these in from Firebase Console > Project Settings > General ----
-const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -194,7 +198,7 @@ const firebaseConfig = {
 
   let currentChores = [];
   let currentEvents = [];
-  let calMode = "week";     // "week" | "month"
+  let calMode = "week"; // "schedule" (timetable) | "week" (simple list) | "month"
   let calOffset = 0;        // weeks or months from current, depending on calMode
 
   onSnapshot(eventsCol, (snapshot) => {
@@ -213,6 +217,7 @@ const firebaseConfig = {
   window.switchCalMode = function (mode) {
     calMode = mode;
     calOffset = 0;
+    document.getElementById("tabSchedule").classList.toggle("active", mode === "schedule");
     document.getElementById("tabWeek").classList.toggle("active", mode === "week");
     document.getElementById("tabMonth").classList.toggle("active", mode === "month");
     renderCalendar();
@@ -253,6 +258,25 @@ const firebaseConfig = {
   function renderCalendar() {
     const today = new Date();
     if (calMode === "week") {
+      const days = buildWeekDays(calOffset);
+      const rangeStart = days[0], rangeEnd = new Date(days[6]); rangeEnd.setHours(23, 59, 59, 999);
+      const occurrences = expandOccurrences(currentEvents, rangeStart, rangeEnd);
+      document.getElementById("calTitle").textContent =
+        `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+      document.getElementById("calGrid").innerHTML = `
+        <div class="week-grid">
+          ${days.map(d => `
+            <div class="day-col ${isSameDay(d, today) ? "today" : ""}">
+              <div class="day-head">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>
+              <div class="day-num">${d.getDate()}</div>
+              ${occurrencesOnDate(occurrences, d).map(o => `
+                <div class="evt ${assigneeClass(o.event.assignee)}">${o.event.time ? `<span class="t">${formatEventTime(o.event)}</span>` : ""}${o.event.title}${o.event.repeat ? " ↻" : ""}</div>
+              `).join("") || ""}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    } else if (calMode === "schedule") {
       const days = buildWeekDays(calOffset);
       const rangeStart = days[0], rangeEnd = new Date(days[6]); rangeEnd.setHours(23, 59, 59, 999);
       const occurrences = expandOccurrences(currentEvents, rangeStart, rangeEnd);
