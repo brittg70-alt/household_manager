@@ -198,7 +198,7 @@ const firebaseConfig = {
   window.addBlankChore = async function () {
     const draft = {
       name: "New chore",
-      assignee: "Anyone",
+      assignee: null,
       repeat: { type: "days", value: 7 },
       lastCompleted: new Date().toISOString().slice(0, 10),
     };
@@ -212,7 +212,7 @@ const firebaseConfig = {
 
   window.saveChore = async function (id) {
     const name = document.getElementById(`name-${id}`).value;
-    const assignee = document.getElementById(`assignee-${id}`).value;
+    const assignee = document.getElementById(`assignee-${id}`).value || null;
     const type = document.getElementById(`type-${id}`).value;
     const lastCompleted = document.getElementById(`last-${id}`).value;
 
@@ -425,7 +425,13 @@ const firebaseConfig = {
       <div class="card">
         <div class="row">
           <label>Name<input id="name-${c.id}" value="${c.name}"></label>
-          <label>Assignee<input id="assignee-${c.id}" value="${c.assignee || ""}"></label>
+          <label>Assignee
+            <select id="assignee-${c.id}">
+              <option value="" ${!c.assignee || c.assignee === "Unassigned" ? "selected" : ""}>Unassigned</option>
+              <option value="Sarah" ${c.assignee === "Sarah" ? "selected" : ""}>Sarah</option>
+              <option value="Britt" ${c.assignee === "Britt" ? "selected" : ""}>Britt</option>
+            </select>
+          </label>
         </div>
         <div class="row">
           <label>Repeat type
@@ -530,7 +536,13 @@ const firebaseConfig = {
         <div class="modal-title">New chore</div>
         <div class="row">
           <label>Name<input id="m-name" value="${c.name}"></label>
-          <label>Assignee<input id="m-assignee" value="${c.assignee || ""}"></label>
+          <label>Assignee
+            <select id="m-assignee">
+              <option value="" ${!c.assignee || c.assignee === "Unassigned" ? "selected" : ""}>Unassigned</option>
+              <option value="Sarah" ${c.assignee === "Sarah" ? "selected" : ""}>Sarah</option>
+              <option value="Britt" ${c.assignee === "Britt" ? "selected" : ""}>Britt</option>
+            </select>
+          </label>
         </div>
         <div class="row">
           <label>Repeat type
@@ -604,7 +616,7 @@ const firebaseConfig = {
   window.saveModalChore = async function () {
     const id = modalDraft.id;
     const name = document.getElementById("m-name").value;
-    const assignee = document.getElementById("m-assignee").value;
+    const assignee = document.getElementById("m-assignee").value || null;
     const type = document.getElementById("m-type").value;
     const lastCompleted = document.getElementById("m-last").value;
 
