@@ -25,17 +25,20 @@
        match /shoppingItems/{itemId} {
          allow read: if true;
          allow update: if request.auth != null
-           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checked']);
-         allow create, delete: if request.auth != null;
+           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checked'])
+           || itemId.matches('med_.*');
+         allow create, delete: if request.auth != null || itemId.matches('med_.*');
        }
        match /medicineCabinet/{itemId} {
          allow read: if true;
-         allow write: if request.auth != null;
+         allow update: if request.auth != null
+           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reorderNow']);
+         allow create, delete: if request.auth != null;
        }
      }
    }
    ```
-   Anyone can view the board, mark a chore done, and check/uncheck a shopping list item — those are the only writes that don't need a login. Everything else (adding/editing/deleting chores, events, shopping items, or medicine cabinet entries, and editing the weekly menu) requires a signed-in account.
+   Anyone can view the board, mark a chore done, check/uncheck a shopping list item, and — automatically, not something a person types in — flag an expired medicine cabinet item for reorder and mirror that onto the shopping list. That last part only works on documents whose ID starts with `med_`, which is a naming scheme only the app itself uses, so it doesn't open up arbitrary shopping list items to anonymous editing. Everything else (adding/editing/deleting chores, events, shopping items, or medicine cabinet entries, and editing the weekly menu) still requires a signed-in account.
 
 ## 1b. Turn on login for the admin page
 1. Left sidebar: **Build → Authentication → Get started**.

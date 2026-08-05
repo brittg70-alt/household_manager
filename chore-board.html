@@ -222,25 +222,25 @@
   <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
 </div>
 
-<script src="recurrence.js?v=7"></script>
-<script src="calendar.js?v=6"></script>
+<script src="recurrence.js?v=8"></script>
+<script src="calendar.js?v=7"></script>
 
 <!-- Firebase (modular SDK via CDN) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {
-    getFirestore, collection, onSnapshot, doc, updateDoc
+    getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // ---- Fill these in from Firebase Console > Project Settings > General ----
-const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -277,7 +277,35 @@ const firebaseConfig = {
   onSnapshot(medicineCol, (snapshot) => {
     currentMedicine = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     renderMedicine();
+    autoFlagExpiredMedicine();
+    syncShoppingFromMedicine();
   });
+
+  // If something's past its expiration date and isn't already flagged, mark
+  // it for reorder automatically. Runs here (not just on the admin page)
+  // because the board is the client that's actually open most of the time.
+  function autoFlagExpiredMedicine() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    currentMedicine.forEach(item => {
+      if (item.expirationDate && item.expirationDate < todayStr && !item.reorderNow) {
+        updateDoc(doc(db, "medicineCabinet", item.id), { reorderNow: true }).catch(() => {});
+      }
+    });
+  }
+
+  // Keeps the shopping list in lockstep with "Reorder now?" — mirrors the
+  // same logic in the admin page so this works even if only the board is open.
+  function syncShoppingFromMedicine() {
+    currentMedicine.forEach(item => {
+      const shopId = `med_${item.id}`;
+      if (item.reorderNow) {
+        const label = item.brands ? `${item.name} (${item.brands})` : item.name;
+        setDoc(doc(db, "shoppingItems", shopId), { text: label, fromMedicine: true }, { merge: true }).catch(() => {});
+      } else {
+        deleteDoc(doc(db, "shoppingItems", shopId)).catch(() => {});
+      }
+    });
+  }
 
   window.switchTab = function (tab) {
     document.getElementById("tabChores").classList.toggle("active", tab === "chores");

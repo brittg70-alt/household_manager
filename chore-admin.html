@@ -47,7 +47,7 @@
   .meal-cell { font-size: clamp(9px, 1.6vw, 12px); padding: clamp(3px, 1vw, 6px); min-height: clamp(34px, 6vw, 44px); }
 
   .med-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1.5px solid var(--ink); border-radius: 10px; }
-  .med-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12.5px; background: var(--card); }
+  .med-table { width: 100%; min-width: 800px; border-collapse: collapse; font-size: 12.5px; background: var(--card); }
   .med-table th { background: var(--ink); color: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 6px; text-align: left; position: sticky; top: 0; }
   .med-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   .med-category-row td { background: var(--gold-tint); font-family: 'Fraunces', serif; font-weight: 600; font-size: 13px; padding: 7px 6px; }
@@ -168,14 +168,14 @@
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
   // ---- Same config as chore-board.html ----
-const firebaseConfig = {
-  apiKey: "AIzaSyDqun6iA6qtkPLT4E_--hPMyn7C7Ji1aIU",
-  authDomain: "household-manager-4de34.firebaseapp.com",
-  projectId: "household-manager-4de34",
-  storageBucket: "household-manager-4de34.firebasestorage.app",
-  messagingSenderId: "1054925325088",
-  appId: "1:1054925325088:web:edd54d1ee36154864e8d45"
-};
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -651,7 +651,9 @@ const firebaseConfig = {
       box.innerHTML = `
         <div class="modal-title">New medicine</div>
         <div class="row">
-          <label style="flex:1;">Category<input id="m-mcategory" value="${m.category || ""}" placeholder="e.g. Pain relievers"></label>
+          <label style="flex:1;">Category
+            <select id="m-mcategory">${medCategoryOptions(m.category)}</select>
+          </label>
         </div>
         <div class="row">
           <label style="flex:1;">Active ingredient<input id="m-mname" value="${m.name || ""}"></label>
@@ -841,14 +843,34 @@ const firebaseConfig = {
   }
 
   // ---------- Medicine cabinet ----------
+  const MED_CATEGORIES = ["Pain relievers", "Antihistamines", "Cold and flu", "Ointments and creams", "Nausea and stomach", "Vitamins", "Skin", "Other"];
   let medicineAdmin = [];
+
+  function medCategoryOptions(current) {
+    const opts = MED_CATEGORIES.slice();
+    if (current && !opts.includes(current)) opts.unshift(current); // keep any pre-existing custom category selectable rather than losing it
+    return opts.map(c => `<option value="${c}" ${c === current ? "selected" : ""}>${c}</option>`).join("");
+  }
 
   onSnapshot(medicineCol, (snap) => {
     medicineAdmin = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     document.getElementById("medStatus").textContent = `${medicineAdmin.length} items`;
     renderMedicineTable();
+    autoFlagExpiredMedicine();
     syncShoppingFromMedicine();
   });
+
+  // If something's past its expiration date and isn't already flagged, mark it
+  // for reorder automatically. The board does this too — having it here as well
+  // means it still self-heals even if the board happens to be offline.
+  function autoFlagExpiredMedicine() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    medicineAdmin.forEach(item => {
+      if (item.expirationDate && item.expirationDate < todayStr && !item.reorderNow) {
+        updateDoc(doc(db, "medicineCabinet", item.id), { reorderNow: true }).catch(() => {});
+      }
+    });
+  }
 
   // Keeps the shopping list in lockstep with "Reorder now?" — runs every time
   // medicine data changes so it self-heals if anything drifts out of sync.
@@ -865,7 +887,7 @@ const firebaseConfig = {
   }
 
   window.addBlankMedicine = async function () {
-    const draft = { category: "", name: "New item", notes: "", brands: "", inStock: true, expirationDate: "", reorderNow: false };
+    const draft = { category: "Other", name: "New item", notes: "", brands: "", inStock: true, expirationDate: "", reorderNow: false };
     try {
       const docRef = await addDoc(medicineCol, draft);
       openMedicineModal({ id: docRef.id, ...draft });
@@ -932,11 +954,12 @@ const firebaseConfig = {
     sorted.forEach(item => {
       const cat = item.category || "Uncategorized";
       if (cat !== lastCategory) {
-        rows.push(`<tr class="med-category-row"><td colspan="7">${cat}</td></tr>`);
+        rows.push(`<tr class="med-category-row"><td colspan="8">${cat}</td></tr>`);
         lastCategory = cat;
       }
       rows.push(`
         <tr>
+          <td><select onchange="saveMedicineField('${item.id}','category', this.value)">${medCategoryOptions(item.category)}</select></td>
           <td><input type="text" value="${item.name}" onchange="saveMedicineField('${item.id}','name', this.value)"></td>
           <td><input type="text" value="${item.notes || ""}" onchange="saveMedicineField('${item.id}','notes', this.value)"></td>
           <td><input type="text" value="${item.brands || ""}" onchange="saveMedicineField('${item.id}','brands', this.value)"></td>
@@ -953,11 +976,11 @@ const firebaseConfig = {
         <table class="med-table">
           <thead>
             <tr>
-              <th>Active Ingredient</th><th>Notes</th><th>Brand(s)</th><th>In Stock?</th><th>Expiration</th><th>Reorder?</th><th></th>
+              <th>Category</th><th>Active Ingredient</th><th>Notes</th><th>Brand(s)</th><th>In Stock?</th><th>Expiration</th><th>Reorder?</th><th></th>
             </tr>
           </thead>
           <tbody>
-            ${rows.join("") || '<tr><td colspan="7" style="padding:14px 6px; color:var(--ink-soft); font-family:\'IBM Plex Mono\',monospace; font-size:13px;">No items yet.</td></tr>'}
+            ${rows.join("") || '<tr><td colspan="8" style="padding:14px 6px; color:var(--ink-soft); font-family:\'IBM Plex Mono\',monospace; font-size:13px;">No items yet.</td></tr>'}
           </tbody>
         </table>
       </div>
