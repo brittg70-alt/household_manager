@@ -28,10 +28,14 @@
            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checked']);
          allow create, delete: if request.auth != null;
        }
+       match /medicineCabinet/{itemId} {
+         allow read: if true;
+         allow write: if request.auth != null;
+       }
      }
    }
    ```
-   Anyone can view the board, mark a chore done, and check/uncheck a shopping list item — those are the only writes that don't need a login. Everything else (adding/editing/deleting chores, events, or shopping items, and editing the weekly menu) requires a signed-in account.
+   Anyone can view the board, mark a chore done, and check/uncheck a shopping list item — those are the only writes that don't need a login. Everything else (adding/editing/deleting chores, events, shopping items, or medicine cabinet entries, and editing the weekly menu) requires a signed-in account.
 
 ## 1b. Turn on login for the admin page
 1. Left sidebar: **Build → Authentication → Get started**.
@@ -52,13 +56,15 @@ Easiest path — Firebase Hosting, since you already have the project open:
 (GitHub Pages or Cloudflare Pages work exactly as well if you'd rather not touch the CLI — just push/drag the same three files.)
 
 ## 4. Add your chores, events, and meals
-Open `chore-admin.html` at your new URL, sign in with the email/password you created in step 1b, and use the **Chores**, **Events**, and **Meal Planning** tabs to add each one — no need to touch Firestore's console directly, though you can if you prefer.
+Open `chore-admin.html` at your new URL, sign in with the email/password you created in step 1b, and use the **Chores**, **Events**, **Meal Planning**, and **Medicine Cabinet** tabs to add each one — no need to touch Firestore's console directly, though you can if you prefer.
 
 Note: `chore-admin.html` now also loads `calendar.js` (for the meal-planning week grid), so all four code files — `chore-board.html`, `chore-admin.html`, `recurrence.js`, `calendar.js` — plus this `SETUP.md` need to sit together in the same folder.
 
 Events can optionally repeat, using the same recurrence engine as chores — set "Repeats" on any event in the admin page (fixed days, X-times-per-Y-days, months, or years). A repeating event shows a ↻ next to its title on the board.
 
 **Meal Planning** has two parts: a weekly menu grid (click any cell in the admin page to type a meal in) and a shopping list (add items in the admin page; anyone can check items off directly from the board, no login needed for that part).
+
+**Medicine Cabinet** tracks OTC medicine inventory grouped by category (active ingredient, notes, brand, in-stock, expiration, reorder). Checking "Reorder now?" on an item automatically adds it to the shopping list; unchecking it removes that auto-added entry again — this sync runs every time the medicine data changes, so it stays accurate even if you edit things out of order.
 
 ## 5. Put it on the iPad
 1. Open `chore-board.html`'s URL in Safari on the iPad.

@@ -141,6 +141,17 @@
   .meal-rowlabel { font-size: clamp(7.5px, 1.3vw, 10px); padding: clamp(4px, 1vw, 8px); }
   .meal-cell { font-size: clamp(9px, 1.6vw, 12px); padding: clamp(3px, 1vw, 6px); min-height: clamp(34px, 6vw, 44px); }
 
+  .med-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1.5px solid var(--ink); border-radius: 10px; }
+  .med-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 13px; background: var(--card); }
+  .med-table th { background: var(--ink); color: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 6px; text-align: left; }
+  .med-table td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  .med-category-row td { background: var(--gold-tint); font-family: 'Fraunces', serif; font-weight: 600; font-size: 13.5px; padding: 7px 6px; }
+  .med-reorder-cell.active { background: var(--brick-tint); font-weight: 600; }
+  .med-expired { color: var(--brick); font-weight: 600; }
+  .med-expiring { color: #8a6a1f; font-weight: 600; }
+  .med-instock-yes { color: var(--forest); }
+  .med-instock-no { color: var(--brick); }
+
   @media (max-width: 700px) {
     .wrap { padding: 16px 12px 40px; }
     h1 { font-size: 30px; }
@@ -156,6 +167,7 @@
         <button class="primary-nav-btn active" id="tabChores" onclick="switchTab('chores')">Chores</button>
         <button class="primary-nav-btn" id="tabCalendar" onclick="switchTab('calendar')">Calendar</button>
         <button class="primary-nav-btn" id="tabMeal" onclick="switchTab('meal')">Meal Planning</button>
+        <button class="primary-nav-btn" id="tabMed" onclick="switchTab('med')">Medicine Cabinet</button>
       </div>
     </div>
     <div class="datebox"><div id="dateBox"></div><div id="connStatus">connecting…</div></div>
@@ -203,6 +215,10 @@
     <div id="shoppingList"></div>
   </div>
 
+  <div id="medView" style="display:none;">
+    <div id="medTable"></div>
+  </div>
+
   <footer>tap a chore to mark it done &mdash; board updates live for everyone</footer>
 </div>
 
@@ -232,11 +248,13 @@ const firebaseConfig = {
   const eventsCol = collection(db, "events");
   const mealPlanCol = collection(db, "mealPlan");
   const shoppingCol = collection(db, "shoppingItems");
+  const medicineCol = collection(db, "medicineCabinet");
 
   let currentChores = [];
   let currentEvents = [];
   let currentMealPlan = [];
   let currentShopping = [];
+  let currentMedicine = [];
   let calMode = "week"; // "schedule" (timetable) | "week" (simple list) | "month"
   let calOffset = 0;        // weeks or months from current, depending on calMode
   let mealWeekOffset = 0;
@@ -256,15 +274,23 @@ const firebaseConfig = {
     renderMeal();
   });
 
+  onSnapshot(medicineCol, (snapshot) => {
+    currentMedicine = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMedicine();
+  });
+
   window.switchTab = function (tab) {
     document.getElementById("tabChores").classList.toggle("active", tab === "chores");
     document.getElementById("tabCalendar").classList.toggle("active", tab === "calendar");
     document.getElementById("tabMeal").classList.toggle("active", tab === "meal");
+    document.getElementById("tabMed").classList.toggle("active", tab === "med");
     document.getElementById("choresView").style.display = tab === "chores" ? "block" : "none";
     document.getElementById("calendarView").style.display = tab === "calendar" ? "block" : "none";
     document.getElementById("mealView").style.display = tab === "meal" ? "block" : "none";
+    document.getElementById("medView").style.display = tab === "med" ? "block" : "none";
     if (tab === "calendar") renderCalendar();
     if (tab === "meal") renderMeal();
+    if (tab === "med") renderMedicine();
   };
 
   window.switchCalMode = function (mode) {
@@ -552,6 +578,53 @@ const firebaseConfig = {
           </div>
         `).join("")
       : `<div class="empty">Nothing on the list.</div>`;
+  }
+
+  // ---------- Medicine cabinet (read-only display; edited from the admin page) ----------
+  function medExpirationClass(dateStr) {
+    if (!dateStr) return "";
+    const exp = new Date(dateStr + "T00:00:00");
+    const today = new Date();
+    const diffDays = Math.round((exp - today) / 86400000);
+    if (diffDays < 0) return "med-expired";
+    if (diffDays <= 60) return "med-expiring";
+    return "";
+  }
+
+  function renderMedicine() {
+    const sorted = [...currentMedicine].sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name));
+    const rows = [];
+    let lastCategory = null;
+    sorted.forEach(item => {
+      const cat = item.category || "Uncategorized";
+      if (cat !== lastCategory) {
+        rows.push(`<tr class="med-category-row"><td colspan="6">${cat}</td></tr>`);
+        lastCategory = cat;
+      }
+      rows.push(`
+        <tr>
+          <td>${item.name}</td>
+          <td>${item.notes || ""}</td>
+          <td>${item.brands || ""}</td>
+          <td class="${item.inStock ? "med-instock-yes" : "med-instock-no"}">${item.inStock ? "Y" : "N"}</td>
+          <td class="${medExpirationClass(item.expirationDate)}">${item.expirationDate || ""}</td>
+          <td class="med-reorder-cell ${item.reorderNow ? "active" : ""}">${item.reorderNow ? "Y" : ""}</td>
+        </tr>
+      `);
+    });
+
+    document.getElementById("medTable").innerHTML = `
+      <div class="med-scroll">
+        <table class="med-table">
+          <thead>
+            <tr><th>Active Ingredient</th><th>Notes</th><th>Brand(s)</th><th>In Stock?</th><th>Expiration</th><th>Reorder?</th></tr>
+          </thead>
+          <tbody>
+            ${rows.join("") || '<tr><td colspan="6" style="padding:14px 6px; color:var(--ink-soft); font-family:\'IBM Plex Mono\',monospace; font-size:13px;">Nothing added yet.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 </script>
 </body>

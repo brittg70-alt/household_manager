@@ -46,6 +46,19 @@
   .meal-rowlabel { font-size: clamp(7.5px, 1.3vw, 10px); padding: clamp(4px, 1vw, 8px); }
   .meal-cell { font-size: clamp(9px, 1.6vw, 12px); padding: clamp(3px, 1vw, 6px); min-height: clamp(34px, 6vw, 44px); }
 
+  .med-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1.5px solid var(--ink); border-radius: 10px; }
+  .med-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12.5px; background: var(--card); }
+  .med-table th { background: var(--ink); color: var(--paper); font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; padding: 8px 6px; text-align: left; position: sticky; top: 0; }
+  .med-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .med-category-row td { background: var(--gold-tint); font-family: 'Fraunces', serif; font-weight: 600; font-size: 13px; padding: 7px 6px; }
+  .med-table input[type="text"] { width: 100%; border: none; background: transparent; font-family: 'Inter', sans-serif; font-size: 12.5px; }
+  .med-table input[type="date"] { border: none; background: transparent; font-family: 'IBM Plex Mono', monospace; font-size: 11px; width: 100%; }
+  .med-check { width: 17px; height: 17px; }
+  .med-reorder-cell.active { background: var(--brick-tint); }
+  .med-expired { color: var(--brick); font-weight: 600; }
+  .med-expiring { color: #8a6a1f; font-weight: 600; }
+  .med-del-btn { border: none; background: transparent; color: var(--ink-soft); cursor: pointer; font-size: 14px; }
+
   .filter-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
   .filter-row input[type="text"] { flex: 1; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line); font-size: 14px; }
 
@@ -77,6 +90,7 @@
       <button class="tab-btn active" id="tabChoresAdmin" onclick="switchAdminTab('chores')">Chores</button>
       <button class="tab-btn" id="tabEventsAdmin" onclick="switchAdminTab('events')">Events</button>
       <button class="tab-btn" id="tabMealAdmin" onclick="switchAdminTab('meal')">Meal Planning</button>
+      <button class="tab-btn" id="tabMedAdmin" onclick="switchAdminTab('med')">Medicine Cabinet</button>
     </div>
 
     <div id="choresAdmin">
@@ -123,6 +137,18 @@
       </div>
       <div id="shopAdminList"></div>
     </div>
+
+    <div id="medAdmin" style="display:none;">
+      <div class="toolbar">
+        <span id="medStatus"></span>
+        <div>
+          <button class="add-btn" onclick="addBlankMedicine()">+ Add medicine</button>
+          <button class="del-btn" style="margin-left:8px;" onclick="doLogout()">Sign out</button>
+        </div>
+      </div>
+      <p style="font-size:12px; color:var(--ink-soft); margin:6px 0 14px;">Checking "Reorder?" automatically adds the item to the shopping list on the Meal Planning page — unchecking it removes it again.</p>
+      <div id="medAdminTable"></div>
+    </div>
   </div>
 </div>
 
@@ -158,14 +184,17 @@ const firebaseConfig = {
   const eventsCol = collection(db, "events");
   const mealPlanCol = collection(db, "mealPlan");
   const shoppingCol = collection(db, "shoppingItems");
+  const medicineCol = collection(db, "medicineCabinet");
 
   window.switchAdminTab = function (tab) {
     document.getElementById("tabChoresAdmin").classList.toggle("active", tab === "chores");
     document.getElementById("tabEventsAdmin").classList.toggle("active", tab === "events");
     document.getElementById("tabMealAdmin").classList.toggle("active", tab === "meal");
+    document.getElementById("tabMedAdmin").classList.toggle("active", tab === "med");
     document.getElementById("choresAdmin").style.display = tab === "chores" ? "block" : "none";
     document.getElementById("eventsAdmin").style.display = tab === "events" ? "block" : "none";
     document.getElementById("mealAdmin").style.display = tab === "meal" ? "block" : "none";
+    document.getElementById("medAdmin").style.display = tab === "med" ? "block" : "none";
   };
 
   window.doLogin = async function () {
@@ -499,6 +528,13 @@ const firebaseConfig = {
     showModal();
   };
 
+  window.openMedicineModal = function (item) {
+    modalKind = "medicine";
+    modalDraft = JSON.parse(JSON.stringify(item));
+    renderModal();
+    showModal();
+  };
+
   window.modalChoreTypeChange = function (newType) {
     modalDraft.repeat = newType === "rate" ? { type: "rate", times: 6, perDays: 10 } : { type: newType, value: 1 };
     renderModal();
@@ -608,6 +644,30 @@ const firebaseConfig = {
         <div class="row" style="justify-content:flex-end; margin-top:10px;">
           <button class="del-btn" onclick="deleteShoppingItem('${s.id}'); closeModal();">Delete</button>
           <button class="save-btn" onclick="saveModalShopping()">Save & close</button>
+        </div>
+      `;
+    } else if (modalKind === "medicine") {
+      const m = modalDraft;
+      box.innerHTML = `
+        <div class="modal-title">New medicine</div>
+        <div class="row">
+          <label style="flex:1;">Category<input id="m-mcategory" value="${m.category || ""}" placeholder="e.g. Pain relievers"></label>
+        </div>
+        <div class="row">
+          <label style="flex:1;">Active ingredient<input id="m-mname" value="${m.name || ""}"></label>
+        </div>
+        <div class="row">
+          <label style="flex:1;">Notes<input id="m-mnotes" value="${m.notes || ""}"></label>
+          <label style="flex:1;">Brand(s)<input id="m-mbrands" value="${m.brands || ""}"></label>
+        </div>
+        <div class="row">
+          <label>In stock?<input type="checkbox" id="m-minstock" ${m.inStock ? "checked" : ""} style="width:18px; height:18px; margin-top:6px;"></label>
+          <label>Expiration<input type="date" id="m-mexpiration" value="${m.expirationDate || ""}"></label>
+          <label>Reorder now?<input type="checkbox" id="m-mreorder" ${m.reorderNow ? "checked" : ""} style="width:18px; height:18px; margin-top:6px;"></label>
+        </div>
+        <div class="row" style="justify-content:flex-end; margin-top:10px;">
+          <button class="del-btn" onclick="deleteMedicine('${m.id}'); closeModal();">Delete</button>
+          <button class="save-btn" onclick="saveModalMedicine()">Save & close</button>
         </div>
       `;
     }
@@ -778,6 +838,130 @@ const firebaseConfig = {
           </div>
         `).join("")
       : `<div style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink-soft); padding:10px 0;">No items yet.</div>`;
+  }
+
+  // ---------- Medicine cabinet ----------
+  let medicineAdmin = [];
+
+  onSnapshot(medicineCol, (snap) => {
+    medicineAdmin = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById("medStatus").textContent = `${medicineAdmin.length} items`;
+    renderMedicineTable();
+    syncShoppingFromMedicine();
+  });
+
+  // Keeps the shopping list in lockstep with "Reorder now?" — runs every time
+  // medicine data changes so it self-heals if anything drifts out of sync.
+  function syncShoppingFromMedicine() {
+    medicineAdmin.forEach(item => {
+      const shopId = `med_${item.id}`;
+      if (item.reorderNow) {
+        const label = item.brands ? `${item.name} (${item.brands})` : item.name;
+        setDoc(doc(db, "shoppingItems", shopId), { text: label, fromMedicine: true }, { merge: true }).catch(() => {});
+      } else {
+        deleteDoc(doc(db, "shoppingItems", shopId)).catch(() => {});
+      }
+    });
+  }
+
+  window.addBlankMedicine = async function () {
+    const draft = { category: "", name: "New item", notes: "", brands: "", inStock: true, expirationDate: "", reorderNow: false };
+    try {
+      const docRef = await addDoc(medicineCol, draft);
+      openMedicineModal({ id: docRef.id, ...draft });
+    } catch (err) {
+      alert("Couldn't add medicine: " + err.message);
+    }
+  };
+
+  window.saveMedicineField = async function (id, field, value) {
+    try {
+      await updateDoc(doc(db, "medicineCabinet", id), { [field]: value });
+    } catch (err) {
+      alert("Couldn't save: " + err.message);
+    }
+  };
+
+  window.deleteMedicine = async function (id) {
+    if (!confirm("Delete this item?")) return;
+    try {
+      await deleteDoc(doc(db, "shoppingItems", `med_${id}`)).catch(() => {});
+      await deleteDoc(doc(db, "medicineCabinet", id));
+    } catch (err) {
+      alert("Couldn't delete: " + err.message);
+    }
+  };
+
+  window.saveModalMedicine = async function () {
+    const id = modalDraft.id;
+    const category = document.getElementById("m-mcategory").value;
+    const name = document.getElementById("m-mname").value;
+    const notes = document.getElementById("m-mnotes").value;
+    const brands = document.getElementById("m-mbrands").value;
+    const inStock = document.getElementById("m-minstock").checked;
+    const expirationDate = document.getElementById("m-mexpiration").value;
+    const reorderNow = document.getElementById("m-mreorder").checked;
+    try {
+      await updateDoc(doc(db, "medicineCabinet", id), { category, name, notes, brands, inStock, expirationDate, reorderNow });
+      closeModal();
+    } catch (err) {
+      alert("Couldn't save medicine: " + err.message);
+    }
+  };
+
+  window.openMedicineModalById = function (id) {
+    const item = medicineAdmin.find(i => i.id === id);
+    if (item) openMedicineModal(item);
+  };
+
+  function medExpirationClass(dateStr) {
+    if (!dateStr) return "";
+    const exp = new Date(dateStr + "T00:00:00");
+    const today = new Date();
+    const diffDays = Math.round((exp - today) / 86400000);
+    if (diffDays < 0) return "med-expired";
+    if (diffDays <= 60) return "med-expiring";
+    return "";
+  }
+
+  function renderMedicineTable() {
+    const sorted = [...medicineAdmin].sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name));
+
+    const rows = [];
+    let lastCategory = null;
+    sorted.forEach(item => {
+      const cat = item.category || "Uncategorized";
+      if (cat !== lastCategory) {
+        rows.push(`<tr class="med-category-row"><td colspan="7">${cat}</td></tr>`);
+        lastCategory = cat;
+      }
+      rows.push(`
+        <tr>
+          <td><input type="text" value="${item.name}" onchange="saveMedicineField('${item.id}','name', this.value)"></td>
+          <td><input type="text" value="${item.notes || ""}" onchange="saveMedicineField('${item.id}','notes', this.value)"></td>
+          <td><input type="text" value="${item.brands || ""}" onchange="saveMedicineField('${item.id}','brands', this.value)"></td>
+          <td style="text-align:center;"><input type="checkbox" class="med-check" ${item.inStock ? "checked" : ""} onchange="saveMedicineField('${item.id}','inStock', this.checked)"></td>
+          <td class="${medExpirationClass(item.expirationDate)}"><input type="date" value="${item.expirationDate || ""}" onchange="saveMedicineField('${item.id}','expirationDate', this.value)"></td>
+          <td class="med-reorder-cell ${item.reorderNow ? "active" : ""}" style="text-align:center;"><input type="checkbox" class="med-check" ${item.reorderNow ? "checked" : ""} onchange="saveMedicineField('${item.id}','reorderNow', this.checked); this.closest('td').classList.toggle('active', this.checked)"></td>
+          <td><button class="med-del-btn" onclick="deleteMedicine('${item.id}')" title="Delete">✕</button></td>
+        </tr>
+      `);
+    });
+
+    document.getElementById("medAdminTable").innerHTML = `
+      <div class="med-scroll">
+        <table class="med-table">
+          <thead>
+            <tr>
+              <th>Active Ingredient</th><th>Notes</th><th>Brand(s)</th><th>In Stock?</th><th>Expiration</th><th>Reorder?</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.join("") || '<tr><td colspan="7" style="padding:14px 6px; color:var(--ink-soft); font-family:\'IBM Plex Mono\',monospace; font-size:13px;">No items yet.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 </script>
 </body>
